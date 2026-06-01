@@ -31,14 +31,12 @@
   input[type=number], input[type=text], select{
     background:var(--input-bg); color:inherit; border:1px solid var(--input-border); padding:8px 10px; border-radius:8px;
   }
-  /* dark select for subdivision */
   select { background:var(--select-bg); color:inherit; border:1px solid var(--input-border); }
   .time-display{min-width:110px; text-align:center; font-weight:700}
   .running{outline:2px solid rgba(124,227,255,0.08); box-shadow:0 6px 18px rgba(0,0,0,0.5)}
   .footer{display:flex; justify-content:space-between; align-items:center; margin-top:12px}
   .pulse{width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--accent-2); background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0.02))}
   @media (max-width:980px){ .wrap{flex-direction:column} .left{width:100%} }
-  /* pulse animation */
   .pulse-on{transform:scale(1.14); transition:transform 0.04s ease;}
   .ghost-small{background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); padding:8px 10px; border-radius:8px; cursor:pointer}
 </style>
@@ -69,7 +67,10 @@
       <div class="small">Примеры: 80 bpm 1:00 → 85 bpm 0:30 → 90 bpm 0:15</div>
       <div style="display:flex; gap:10px; align-items:center">
         <div class="pulse" id="globalPulse">—</div>
-        <div class="small" id="statusLabel">Ожидание</div>
+        <div style="display:flex; flex-direction:column; align-items:flex-start">
+          <div class="small" id="statusLabel">Ожидание</div>
+          <div class="small" id="remainingTime">—</div>
+        </div>
       </div>
     </div>
   </div>
@@ -77,16 +78,18 @@
 
 <script>
 /*
-Изменения:
-- тёмный фон для select
-- значение по умолчанию нового метронома: 100 bpm, 1 min, subdiv 4x, beats 4
-- добавлены пресеты слева; по умолчанию загружается "Тренировка 1"
-- пресеты можно выбирать (заменяют текущий список)
+Обновлённый файл:
+- поле repeats (Повт.) с дефолтным 2
+- отображение оставшегося времени текущего интервала
+- пауза pauseDuration (5s) между завершением и повтором и между интервалами
+- masterGain + ctx.resume для надёжного звука
+- исправлены логика планировщика и сбросы таймеров
 */
 
 (function(){
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   let ctx = null;
+  let masterGain = null;
   const lookahead = 25.0;
   const scheduleAheadTime = 0.1;
 
@@ -99,40 +102,53 @@
   const globalPulse = document.getElementById('globalPulse');
   const presetsEl = document.getElementById('presets');
   const savePresetBtn = document.getElementById('savePreset');
+  const remainingTimeEl = document.getElementById('remainingTime');
 
   // state
-  let items = []; // {id,bpm,durationSec,enabled,beats,subdiv}
+  let items = []; // {id,bpm,durationSec,enabled,beats,subdiv,repeats}
   let nextId = 1;
 
   // runner
-  let runner = { running:false, index:0, itemEndTime:0, schedulerId:null, nextNoteTime:0, currentSubdivisionIdx:0, subdivision:1, volume:0.8, tempo:120, beatsPerMeasure:4 };
+  let runner = {
+    running:false,
+    index:0,
+    itemEndTime:0,
+    schedulerId:null,
+    nextNoteTime:0,
+    currentSubdivisionIdx:0,
+    subdivision:1,
+    volume:0.8,
+    tempo:120,
+    beatsPerMeasure:4,
+    inPause:false,
+    pauseDuration:5.0,
+    repeatPending:false,
+    currentRepeatRemaining:0
+  };
 
-  // default new item values requested
   const NEW_DEFAULT = { bpm:100, durationSec:60, beats:4, subdiv:4, repeats:2 };
 
-  // presets data
   const PRESETS = [
     {
       name: 'Тренировка 1',
       items: [
-        { bpm:70, durationSec:120, beats:4, subdiv:4 },
-        { bpm:80, durationSec:90, beats:4, subdiv:4 }, // 1 min 30 sec
-        { bpm:90, durationSec:60, beats:4, subdiv:4 },
-        { bpm:100, durationSec:30, beats:4, subdiv:4 },
+        { bpm:70, durationSec:120, beats:4, subdiv:4, repeats:2 },
+        { bpm:80, durationSec:90, beats:4, subdiv:4, repeats:2 },
+        { bpm:90, durationSec:60, beats:4, subdiv:4, repeats:2 },
+        { bpm:100, durationSec:30, beats:4, subdiv:4, repeats:2 },
       ]
     },
     {
       name: 'Тренировка 2',
       items: [
-        { bpm:80, durationSec:90, beats:4, subdiv:4 },
-        { bpm:90, durationSec:60, beats:4, subdiv:4 },
-        { bpm:100, durationSec:45, beats:4, subdiv:4 },
-        { bpm:110, durationSec:30, beats:4, subdiv:4 },
+        { bpm:80, durationSec:90, beats:4, subdiv:4, repeats:2 },
+        { bpm:90, durationSec:60, beats:4, subdiv:4, repeats:2 },
+        { bpm:100, durationSec:45, beats:4, subdiv:4, repeats:2 },
+        { bpm:110, durationSec:30, beats:4, subdiv:4, repeats:2 },
       ]
     }
   ];
 
-  // helper
   function pad(n){ return n<10?('0'+n):(''+n); }
   function formatTime(sec){ return `${Math.floor(sec/60)}:${pad(sec%60)}`; }
   function parseTimeString(s){
@@ -143,7 +159,15 @@
     return null;
   }
 
-  // list rendering + CRUD
+  function ensureCtx(){
+    if(!ctx) ctx = new AudioCtx();
+    if(!masterGain && ctx){
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 1;
+      masterGain.connect(ctx.destination);
+    }
+  }
+
   function addItem(bpm=NEW_DEFAULT.bpm, durationSec=NEW_DEFAULT.durationSec, beats=NEW_DEFAULT.beats, subdiv=NEW_DEFAULT.subdiv, repeats=NEW_DEFAULT.repeats){
     const id = nextId++;
     const item = { id, bpm, durationSec, enabled:true, beats, subdiv, repeats };
@@ -151,7 +175,6 @@
     renderList();
     return item;
   }
-
   function clearItems(){ items = []; renderList(); }
   function removeItem(id){ items = items.filter(i=>i.id!==id); renderList(); }
 
@@ -169,14 +192,12 @@
       const center = document.createElement('div');
       center.className = 'center';
 
-      // BPM
       const bpmField = document.createElement('div'); bpmField.className='field';
       const bpmLabel = document.createElement('div'); bpmLabel.className='small'; bpmLabel.textContent='BPM';
       const bpmInput = document.createElement('input'); bpmInput.type='number'; bpmInput.value=it.bpm; bpmInput.min=30; bpmInput.max=300;
       bpmInput.addEventListener('change', ()=> { it.bpm = Math.max(30, Math.min(300, parseInt(bpmInput.value||NEW_DEFAULT.bpm))); bpmInput.value = it.bpm; });
       bpmField.appendChild(bpmLabel); bpmField.appendChild(bpmInput);
 
-      // Duration
       const durField = document.createElement('div'); durField.className='field';
       const durLabel = document.createElement('div'); durLabel.className='small'; durLabel.textContent='Время';
       const durInput = document.createElement('input'); durInput.type='text'; durInput.value = formatTime(it.durationSec);
@@ -189,7 +210,6 @@
       });
       durField.appendChild(durLabel); durField.appendChild(durInput);
 
-      // Subdiv & beats
       const subdivField = document.createElement('div'); subdivField.className='field';
       const subdivSel = document.createElement('select');
       [1,2,3,4].forEach(s=> { const o=document.createElement('option'); o.value=s; o.textContent=`${s}x`; if(s===it.subdiv) o.selected=true; subdivSel.appendChild(o); });
@@ -198,16 +218,13 @@
       beatsInput.addEventListener('change', ()=> it.beats = Math.max(1, Math.min(12, parseInt(beatsInput.value||4))));
       subdivField.appendChild(subdivSel); subdivField.appendChild(beatsInput);
 
-      // Repeats field
       const repeatsField = document.createElement('div'); repeatsField.className='field';
       const repeatsLabel = document.createElement('div'); repeatsLabel.className='small'; repeatsLabel.textContent='Повт.';
       const repeatsInput = document.createElement('input'); repeatsInput.type='number'; repeatsInput.value = it.repeats || 1;
-      repeatsInput.min = 1; repeatsInput.max = 10; repeatsInput.style.width = '64px';
-      repeatsInput.addEventListener('change', ()=> it.repeats = Math.max(1, Math.min(10, parseInt(repeatsInput.value||1))));
+      repeatsInput.min = 1; repeatsInput.max = 20; repeatsInput.style.width = '64px';
+      repeatsInput.addEventListener('change', ()=> it.repeats = Math.max(1, Math.min(20, parseInt(repeatsInput.value||1))));
       repeatsField.appendChild(repeatsLabel); repeatsField.appendChild(repeatsInput);
-      center.appendChild(repeatsField);
 
-      // enabled
       const enabledField = document.createElement('div'); enabledField.className='field';
       const enabledLabel = document.createElement('label'); enabledLabel.className='small';
       const enabledCheckbox = document.createElement('input'); enabledCheckbox.type='checkbox'; enabledCheckbox.checked = it.enabled;
@@ -215,11 +232,11 @@
       enabledLabel.appendChild(enabledCheckbox); enabledLabel.appendChild(document.createTextNode(' Вкл'));
       enabledField.appendChild(enabledLabel);
 
-      center.appendChild(bpmField); center.appendChild(durField); center.appendChild(subdivField); center.appendChild(enabledField);
+      center.appendChild(bpmField); center.appendChild(durField); center.appendChild(subdivField); center.appendChild(repeatsField); center.appendChild(enabledField);
 
       const right = document.createElement('div'); right.style.display='flex'; right.style.gap='8px'; right.style.alignItems='center';
       const timeDisplay = document.createElement('div'); timeDisplay.className='time-display small'; timeDisplay.textContent = formatTime(it.durationSec);
-      const deleteBtn = document.createElement('button'); deleteBtn.className='btn ghost'; deleteBtn.textContent='Удалить';
+      const deleteBtn = document.createElement('button'); deleteBtn.className = 'btn ghost'; deleteBtn.textContent='Удалить';
       deleteBtn.addEventListener('click', ()=> removeItem(it.id));
       right.appendChild(timeDisplay); right.appendChild(deleteBtn);
 
@@ -228,44 +245,54 @@
     });
   }
 
-  // audio
-  function ensureCtx(){ if(!ctx) ctx = new AudioCtx(); }
   function playClickAt(time, volume=0.8){
-    if(!ctx) return;
+    if(!ctx || !masterGain) return;
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.type = 'sine';
     o.frequency.value = 1000;
-    g.gain.setValueAtTime(0, time);
+    g.gain.setValueAtTime(0.0001, time);
     g.gain.linearRampToValueAtTime(volume, time + 0.001);
     g.gain.exponentialRampToValueAtTime(0.001, time + 0.06);
     o.connect(g);
-    g.connect(ctx.destination);
+    g.connect(masterGain);
     o.start(time);
     o.stop(time + 0.07);
   }
 
-  // runner
   function startPlaylist(){
     if(runner.running) return;
     if(items.length===0){ statusLabel.textContent='Список пуст'; return; }
     ensureCtx();
+    ctx.resume && ctx.resume();
+    if(masterGain){
+      masterGain.gain.cancelScheduledValues(ctx.currentTime);
+      masterGain.gain.setValueAtTime(1, ctx.currentTime + 0.001);
+    }
     runner.running = true;
     runner.index = 0;
     statusLabel.textContent = 'Запущено';
     runNextItem();
+    updateRemainingDisplay();
   }
 
   function stopPlaylist(){
     runner.running = false;
     if(runner.schedulerId){ clearTimeout(runner.schedulerId); runner.schedulerId = null; }
+    if(masterGain && ctx){
+      masterGain.gain.cancelScheduledValues(ctx.currentTime);
+      masterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    }
     statusLabel.textContent = 'Остановлено';
     globalPulse.textContent = '—';
+    remainingTimeEl.textContent = '—';
     unmarkRunningItem();
   }
 
   function runNextItem(){
     if(!runner.running) return;
+    runner.inPause = false;
+    runner.repeatPending = false;
     while(runner.index < items.length && !items[runner.index].enabled) runner.index++;
     if(runner.index >= items.length){ stopPlaylist(); statusLabel.textContent = 'Завершено'; return; }
     const it = items[runner.index];
@@ -273,14 +300,14 @@
     runner.subdivision = it.subdiv || 1;
     runner.beatsPerMeasure = it.beats || 4;
     runner.currentSubdivisionIdx = 0;
-    runner.nextNoteTime = ctx.currentTime + 0.05;
-    runner.itemEndTime = ctx.currentTime + it.durationSec;
-    // количество оставшихся повторов (повторять ещё N раз после первого проигрыша)
+    runner.nextNoteTime = (ctx ? ctx.currentTime : 0) + 0.05;
+    runner.itemEndTime = (ctx ? ctx.currentTime : 0) + it.durationSec;
     runner.currentRepeatRemaining = (it.repeats || 1) - 1;
     highlightRunningItem(it.id);
+    statusLabel.textContent = `Играет ${it.bpm} bpm`;
+    updateRemainingDisplay();
     scheduleLoop();
   }
-
 
   function highlightRunningItem(id){
     unmarkRunningItem();
@@ -293,7 +320,8 @@
   }
 
   function schedule(){
-    while(runner.nextNoteTime < ctx.currentTime + scheduleAheadTime){
+    if(runner.inPause) return;
+    while(runner.nextNoteTime < (ctx.currentTime + scheduleAheadTime)){
       playClickAt(runner.nextNoteTime, runner.volume);
       (function(noteTime){
         const noteIdx = runner.currentSubdivisionIdx;
@@ -313,28 +341,61 @@
 
   function scheduleLoop(){
     if(!runner.running) return;
+    updateRemainingDisplay();
     schedule();
-    if(ctx.currentTime >= runner.itemEndTime){
+    if((ctx ? ctx.currentTime : 0) >= runner.itemEndTime){
+      if(runner.inPause){
+        runner.inPause = false;
+        if(runner.repeatPending){
+          const it = items[runner.index];
+          runner.currentSubdivisionIdx = 0;
+          runner.nextNoteTime = (ctx ? ctx.currentTime : 0) + 0.05;
+          runner.itemEndTime = (ctx ? ctx.currentTime : 0) + (it.durationSec || NEW_DEFAULT.durationSec);
+          statusLabel.textContent = `Повтор ${it.bpm} bpm`;
+          runner.repeatPending = false;
+          runner.schedulerId = setTimeout(scheduleLoop, lookahead);
+          return;
+        } else {
+          runner.index++;
+          runNextItem();
+          return;
+        }
+      }
+
       if(runner.currentRepeatRemaining > 0){
-        // повторяем тот же элемент: сбрасываем время и продолжаем
         runner.currentRepeatRemaining--;
-        runner.currentSubdivisionIdx = 0;
-        runner.nextNoteTime = ctx.currentTime + 0.05;
-        runner.itemEndTime = ctx.currentTime + (items[runner.index].durationSec || NEW_DEFAULT.durationSec);
-        // не меняем runner.index
+        runner.inPause = true;
+        runner.repeatPending = true;
+        runner.itemEndTime = (ctx ? ctx.currentTime : 0) + runner.pauseDuration;
+        statusLabel.textContent = `Пауза перед повтором ${runner.pauseDuration}s`;
+        globalPulse.textContent = '—';
         runner.schedulerId = setTimeout(scheduleLoop, lookahead);
         return;
       } else {
-        runner.index++;
-        runNextItem();
+        runner.inPause = true;
+        runner.repeatPending = false;
+        runner.itemEndTime = (ctx ? ctx.currentTime : 0) + runner.pauseDuration;
+        statusLabel.textContent = `Пауза ${runner.pauseDuration}s`;
+        globalPulse.textContent = '—';
+        runner.schedulerId = setTimeout(scheduleLoop, lookahead);
         return;
       }
     }
     runner.schedulerId = setTimeout(scheduleLoop, lookahead);
   }
 
+  function updateRemainingDisplay(){
+    if(!remainingTimeEl) return;
+    if(!runner.running || !ctx){ remainingTimeEl.textContent = '—'; return; }
+    const now = ctx.currentTime;
+    const remaining = Math.max(0, Math.ceil(runner.itemEndTime - now));
+    if(runner.inPause){
+      remainingTimeEl.textContent = `Пауза ${remaining}s`;
+    } else {
+      remainingTimeEl.textContent = `Осталось ${remaining}s`;
+    }
+  }
 
-  // presets UI
   function renderPresets(){
     presetsEl.innerHTML = '';
     PRESETS.forEach((p, idx) => {
@@ -344,7 +405,6 @@
       btn.addEventListener('click', ()=> { loadPreset(idx); markActivePreset(idx); });
       presetsEl.appendChild(btn);
     });
-    // default highlight first
     markActivePreset(0);
   }
   function markActivePreset(idx){
@@ -361,23 +421,20 @@
     statusLabel.textContent = `Загружен ${p.name}`;
   }
 
-  // Save current as preset (simple)
   savePresetBtn.addEventListener('click', ()=>{
     const name = prompt('Название пресета', 'Новый пресет');
     if(!name) return;
-    const preset = { name, items: items.map(it=>({ bpm: it.bpm, durationSec: it.durationSec, beats: it.beats, subdiv: it.subdiv })) };
+    const preset = { name, items: items.map(it=>({ bpm: it.bpm, durationSec: it.durationSec, beats: it.beats, subdiv: it.subdiv, repeats: it.repeats })) };
     PRESETS.push(preset);
     renderPresets();
     statusLabel.textContent = `Сохранён пресет "${name}"`;
   });
 
-  // UI hooks
   addBtn.addEventListener('click', ()=> { addItem(); });
   startAllBtn.addEventListener('click', ()=> { startPlaylist(); });
   stopAllBtn.addEventListener('click', ()=> { stopPlaylist(); });
   window.addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); runner.running ? stopPlaylist() : startPlaylist(); } });
 
-  // init: render presets, load default preset 0
   renderPresets();
   loadPreset(0);
 
