@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Тренировка с метрономом — тёмная тема</title>
+<style>
+  :root{
+    --bg:#061018; --panel:#0d1418; --muted:#8b97a0; --accent:#7ce3ff; --accent-2:#ffb86b;
+    --glass: rgba(255,255,255,0.03); --radius:12px;
+    --input-bg:#0b1114; --select-bg:#0b1114; --input-border:rgba(255,255,255,0.04);
+  }
+  *{box-sizing:border-box;font-family:Inter,Segoe UI,Roboto,system-ui,Arial,sans-serif}
+  body{margin:0; min-height:100vh; background:linear-gradient(#041018,#07111a); color:#eaf2f6; padding:24px; display:flex; justify-content:center}
+  .wrap{width:1000px; max-width:96vw; display:flex; gap:16px}
+  h1{margin:0 0 14px 0; font-size:20px}
+  .panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),var(--panel)); border-radius:14px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,0.6)}
+  .left{width:220px}
+  .presets{display:flex; flex-direction:column; gap:8px}
+  .preset-btn{padding:10px; border-radius:10px; background:transparent; border:1px solid rgba(255,255,255,0.03); color:var(--muted); cursor:pointer; text-align:left}
+  .preset-btn.active{background:linear-gradient(90deg,rgba(124,227,255,0.06),rgba(255,184,106,0.04)); color:#eaf2f6; border-color:rgba(124,227,255,0.12)}
+  .controls{display:flex; gap:10px; align-items:center; margin-bottom:12px}
+  .btn{background:linear-gradient(90deg,var(--accent),#5ed3ff); border:none; color:#042026; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:700}
+  .btn.ghost{background:transparent; color:var(--accent); border:1px solid rgba(124,227,255,0.12)}
+  .small{font-size:13px; color:var(--muted)}
+  .list{margin-top:12px; display:flex; flex-direction:column; gap:8px; max-height:56vh; overflow:auto}
+  .item{display:flex; gap:10px; align-items:center; padding:10px; border-radius:10px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03)}
+  .item .leftIdx{width:40px; text-align:center; color:var(--muted); font-weight:700}
+  .item .center{flex:1; display:flex; align-items:center; gap:12px}
+  .field{display:flex; gap:6px; align-items:center}
+  input[type=number], input[type=text], select{
+    background:var(--input-bg); color:inherit; border:1px solid var(--input-border); padding:8px 10px; border-radius:8px;
+  }
+  /* dark select for subdivision */
+  select { background:var(--select-bg); color:inherit; border:1px solid var(--input-border); }
+  .time-display{min-width:110px; text-align:center; font-weight:700}
+  .running{outline:2px solid rgba(124,227,255,0.08); box-shadow:0 6px 18px rgba(0,0,0,0.5)}
+  .footer{display:flex; justify-content:space-between; align-items:center; margin-top:12px}
+  .pulse{width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--accent-2); background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0.02))}
+  @media (max-width:980px){ .wrap{flex-direction:column} .left{width:100%} }
+  /* pulse animation */
+  .pulse-on{transform:scale(1.14); transition:transform 0.04s ease;}
+  .ghost-small{background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); padding:8px 10px; border-radius:8px; cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="left panel">
+    <h1>Пресеты</h1>
+    <div class="presets" id="presets"></div>
+    <div style="margin-top:12px">
+      <button id="savePreset" class="ghost-small">Сохранить текущий как пресет</button>
+    </div>
+  </div>
+
+  <div class="panel" style="flex:1">
+    <h1>Тренировка с метрономом — тёмная тема</h1>
+
+    <div class="controls">
+      <button class="btn" id="addBtn">Добавить метроном</button>
+      <button class="btn ghost" id="startAll">Запустить плейлист</button>
+      <button class="btn ghost" id="stopAll">Остановить</button>
+      <div style="margin-left:auto" class="small">Клик: одинаковый звук для всех ударов</div>
+    </div>
+
+    <div class="list" id="list"></div>
+
+    <div class="footer">
+      <div class="small">Примеры: 80 bpm 1:00 → 85 bpm 0:30 → 90 bpm 0:15</div>
+      <div style="display:flex; gap:10px; align-items:center">
+        <div class="pulse" id="globalPulse">—</div>
+        <div class="small" id="statusLabel">Ожидание</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+Изменения:
+- тёмный фон для select
+- значение по умолчанию нового метронома: 100 bpm, 1 min, subdiv 4x, beats 4
+- добавлены пресеты слева; по умолчанию загружается "Тренировка 1"
+- пресеты можно выбирать (заменяют текущий список)
+*/
+
+(function(){
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  let ctx = null;
+  const lookahead = 25.0;
+  const scheduleAheadTime = 0.1;
+
+  // UI
+  const listEl = document.getElementById('list');
+  const addBtn = document.getElementById('addBtn');
+  const startAllBtn = document.getElementById('startAll');
+  const stopAllBtn = document.getElementById('stopAll');
+  const statusLabel = document.getElementById('statusLabel');
+  const globalPulse = document.getElementById('globalPulse');
+  const presetsEl = document.getElementById('presets');
+  const savePresetBtn = document.getElementById('savePreset');
+
+  // state
+  let items = []; // {id,bpm,durationSec,enabled,beats,subdiv}
+  let nextId = 1;
+
+  // runner
+  let runner = { running:false, index:0, itemEndTime:0, schedulerId:null, nextNoteTime:0, currentSubdivisionIdx:0, subdivision:1, volume:0.8, tempo:120, beatsPerMeasure:4 };
+
+  // default new item values requested
+  const NEW_DEFAULT = { bpm:100, durationSec:60, beats:4, subdiv:4 };
+
+  // presets data
+  const PRESETS = [
+    {
+      name: 'Тренировка 1',
+      items: [
+        { bpm:70, durationSec:120, beats:4, subdiv:1 },
+        { bpm:80, durationSec:90, beats:4, subdiv:1 }, // 1 min 30 sec
+        { bpm:90, durationSec:60, beats:4, subdiv:1 },
+        { bpm:100, durationSec:30, beats:4, subdiv:1 },
+      ]
+    },
+    {
+      name: 'Тренировка 2',
+      items: [
+        { bpm:80, durationSec:90, beats:4, subdiv:1 },
+        { bpm:90, durationSec:60, beats:4, subdiv:1 },
+        { bpm:100, durationSec:45, beats:4, subdiv:1 },
+        { bpm:110, durationSec:30, beats:4, subdiv:1 },
+      ]
+    }
+  ];
+
+  // helper
+  function pad(n){ return n<10?('0'+n):(''+n); }
+  function formatTime(sec){ return `${Math.floor(sec/60)}:${pad(sec%60)}`; }
+  function parseTimeString(s){
+    s = (''+s).trim();
+    const m = s.match(/^(\d+):(\d{1,2})$/);
+    if(m) return parseInt(m[1])*60 + parseInt(m[2]);
+    const mm = s.match(/^(\d+)$/); if(mm) return parseInt(mm[1]);
+    return null;
+  }
+
+  // list rendering + CRUD
+  function addItem(bpm=NEW_DEFAULT.bpm, durationSec=NEW_DEFAULT.durationSec, beats=NEW_DEFAULT.beats, subdiv=NEW_DEFAULT.subdiv){
+    const id = nextId++;
+    const item = { id, bpm, durationSec, enabled:true, beats, subdiv };
+    items.push(item);
+    renderList();
+    return item;
+  }
+  function clearItems(){ items = []; renderList(); }
+  function removeItem(id){ items = items.filter(i=>i.id!==id); renderList(); }
+
+  function renderList(){
+    listEl.innerHTML = '';
+    items.forEach((it, idx) => {
+      const row = document.createElement('div');
+      row.className = 'item';
+      row.dataset.id = it.id;
+
+      const left = document.createElement('div');
+      left.className = 'leftIdx';
+      left.textContent = (idx+1);
+
+      const center = document.createElement('div');
+      center.className = 'center';
+
+      // BPM
+      const bpmField = document.createElement('div'); bpmField.className='field';
+      const bpmLabel = document.createElement('div'); bpmLabel.className='small'; bpmLabel.textContent='BPM';
+      const bpmInput = document.createElement('input'); bpmInput.type='number'; bpmInput.value=it.bpm; bpmInput.min=30; bpmInput.max=300;
+      bpmInput.addEventListener('change', ()=> { it.bpm = Math.max(30, Math.min(300, parseInt(bpmInput.value||NEW_DEFAULT.bpm))); bpmInput.value = it.bpm; });
+      bpmField.appendChild(bpmLabel); bpmField.appendChild(bpmInput);
+
+      // Duration
+      const durField = document.createElement('div'); durField.className='field';
+      const durLabel = document.createElement('div'); durLabel.className='small'; durLabel.textContent='Время';
+      const durInput = document.createElement('input'); durInput.type='text'; durInput.value = formatTime(it.durationSec);
+      durInput.title = 'MM:SS';
+      durInput.addEventListener('change', ()=> {
+        const v = parseTimeString(durInput.value);
+        if(v==null){ durInput.value = formatTime(it.durationSec); return; }
+        it.durationSec = v;
+        durInput.value = formatTime(v);
+      });
+      durField.appendChild(durLabel); durField.appendChild(durInput);
+
+      // Subdiv & beats
+      const subdivField = document.createElement('div'); subdivField.className='field';
+      const subdivSel = document.createElement('select');
+      [1,2,3,4].forEach(s=> { const o=document.createElement('option'); o.value=s; o.textContent=`${s}x`; if(s===it.subdiv) o.selected=true; subdivSel.appendChild(o); });
+      subdivSel.addEventListener('change', ()=> it.subdiv = parseInt(subdivSel.value));
+      const beatsInput = document.createElement('input'); beatsInput.type='number'; beatsInput.value=it.beats; beatsInput.min=1; beatsInput.max=12; beatsInput.style.width='64px';
+      beatsInput.addEventListener('change', ()=> it.beats = Math.max(1, Math.min(12, parseInt(beatsInput.value||4))));
+      subdivField.appendChild(subdivSel); subdivField.appendChild(beatsInput);
+
+      // enabled
+      const enabledField = document.createElement('div'); enabledField.className='field';
+      const enabledLabel = document.createElement('label'); enabledLabel.className='small';
+      const enabledCheckbox = document.createElement('input'); enabledCheckbox.type='checkbox'; enabledCheckbox.checked = it.enabled;
+      enabledCheckbox.addEventListener('change', ()=> it.enabled = enabledCheckbox.checked);
+      enabledLabel.appendChild(enabledCheckbox); enabledLabel.appendChild(document.createTextNode(' Вкл'));
+      enabledField.appendChild(enabledLabel);
+
+      center.appendChild(bpmField); center.appendChild(durField); center.appendChild(subdivField); center.appendChild(enabledField);
+
+      const right = document.createElement('div'); right.style.display='flex'; right.style.gap='8px'; right.style.alignItems='center';
+      const timeDisplay = document.createElement('div'); timeDisplay.className='time-display small'; timeDisplay.textContent = formatTime(it.durationSec);
+      const deleteBtn = document.createElement('button'); deleteBtn.className='btn ghost'; deleteBtn.textContent='Удалить';
+      deleteBtn.addEventListener('click', ()=> removeItem(it.id));
+      right.appendChild(timeDisplay); right.appendChild(deleteBtn);
+
+      row.appendChild(left); row.appendChild(center); row.appendChild(right);
+      listEl.appendChild(row);
+    });
+  }
+
+  // audio
+  function ensureCtx(){ if(!ctx) ctx = new AudioCtx(); }
+  function playClickAt(time, volume=0.8){
+    if(!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.value = 1000;
+    g.gain.setValueAtTime(0, time);
+    g.gain.linearRampToValueAtTime(volume, time + 0.001);
+    g.gain.exponentialRampToValueAtTime(0.001, time + 0.06);
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start(time);
+    o.stop(time + 0.07);
+  }
+
+  // runner
+  function startPlaylist(){
+    if(runner.running) return;
+    if(items.length===0){ statusLabel.textContent='Список пуст'; return; }
+    ensureCtx();
+    runner.running = true;
+    runner.index = 0;
+    statusLabel.textContent = 'Запущено';
+    runNextItem();
+  }
+
+  function stopPlaylist(){
+    runner.running = false;
+    if(runner.schedulerId){ clearTimeout(runner.schedulerId); runner.schedulerId = null; }
+    statusLabel.textContent = 'Остановлено';
+    globalPulse.textContent = '—';
+    unmarkRunningItem();
+  }
+
+  function runNextItem(){
+    if(!runner.running) return;
+    while(runner.index < items.length && !items[runner.index].enabled) runner.index++;
+    if(runner.index >= items.length){ stopPlaylist(); statusLabel.textContent = 'Завершено'; return; }
+    const it = items[runner.index];
+    runner.tempo = it.bpm;
+    runner.subdivision = it.subdiv || 1;
+    runner.beatsPerMeasure = it.beats || 4;
+    runner.currentSubdivisionIdx = 0;
+    runner.nextNoteTime = ctx.currentTime + 0.05;
+    runner.itemEndTime = ctx.currentTime + it.durationSec;
+    highlightRunningItem(it.id);
+    scheduleLoop();
+  }
+
+  function highlightRunningItem(id){
+    unmarkRunningItem();
+    const row = listEl.querySelector(`.item[data-id="${id}"]`);
+    if(row) row.classList.add('running');
+  }
+  function unmarkRunningItem(){
+    const prev = listEl.querySelectorAll('.item.running');
+    prev.forEach(p=>p.classList.remove('running'));
+  }
+
+  function schedule(){
+    while(runner.nextNoteTime < ctx.currentTime + scheduleAheadTime){
+      playClickAt(runner.nextNoteTime, runner.volume);
+      (function(noteTime){
+        const noteIdx = runner.currentSubdivisionIdx;
+        const delay = Math.max(0, (noteTime - ctx.currentTime) * 1000);
+        setTimeout(()=> {
+          globalPulse.classList.add('pulse-on');
+          globalPulse.textContent = '' + (noteIdx % runner.beatsPerMeasure + 1);
+          setTimeout(()=> globalPulse.classList.remove('pulse-on'), 80);
+        }, delay);
+      })(runner.nextNoteTime);
+
+      const secondsPerBeat = 60.0 / runner.tempo;
+      runner.nextNoteTime += secondsPerBeat / runner.subdivision;
+      runner.currentSubdivisionIdx++;
+    }
+  }
+
+  function scheduleLoop(){
+    if(!runner.running) return;
+    schedule();
+    if(ctx.currentTime >= runner.itemEndTime){
+      runner.index++;
+      runNextItem();
+      return;
+    }
+    runner.schedulerId = setTimeout(scheduleLoop, lookahead);
+  }
+
+  // presets UI
+  function renderPresets(){
+    presetsEl.innerHTML = '';
+    PRESETS.forEach((p, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'preset-btn';
+      btn.textContent = p.name;
+      btn.addEventListener('click', ()=> { loadPreset(idx); markActivePreset(idx); });
+      presetsEl.appendChild(btn);
+    });
+    // default highlight first
+    markActivePreset(0);
+  }
+  function markActivePreset(idx){
+    const btns = presetsEl.querySelectorAll('.preset-btn');
+    btns.forEach((b,i)=> b.classList.toggle('active', i===idx));
+  }
+  function loadPreset(idx){
+    const p = PRESETS[idx];
+    if(!p) return;
+    items = [];
+    nextId = 1;
+    p.items.forEach(it => addItem(it.bpm, it.durationSec, it.beats || 4, it.subdiv || 1));
+    renderList();
+    statusLabel.textContent = `Загружен ${p.name}`;
+  }
+
+  // Save current as preset (simple)
+  savePresetBtn.addEventListener('click', ()=>{
+    const name = prompt('Название пресета', 'Новый пресет');
+    if(!name) return;
+    const preset = { name, items: items.map(it=>({ bpm: it.bpm, durationSec: it.durationSec, beats: it.beats, subdiv: it.subdiv })) };
+    PRESETS.push(preset);
+    renderPresets();
+    statusLabel.textContent = `Сохранён пресет "${name}"`;
+  });
+
+  // UI hooks
+  addBtn.addEventListener('click', ()=> { addItem(); });
+  startAllBtn.addEventListener('click', ()=> { startPlaylist(); });
+  stopAllBtn.addEventListener('click', ()=> { stopPlaylist(); });
+  window.addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); runner.running ? stopPlaylist() : startPlaylist(); } });
+
+  // init: render presets, load default preset 0
+  renderPresets();
+  loadPreset(0);
+
+})();
+</script>
+</body>
+</html>
