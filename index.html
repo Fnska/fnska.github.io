@@ -108,7 +108,7 @@
   let runner = { running:false, index:0, itemEndTime:0, schedulerId:null, nextNoteTime:0, currentSubdivisionIdx:0, subdivision:1, volume:0.8, tempo:120, beatsPerMeasure:4 };
 
   // default new item values requested
-  const NEW_DEFAULT = { bpm:100, durationSec:60, beats:4, subdiv:4 };
+  const NEW_DEFAULT = { bpm:100, durationSec:60, beats:4, subdiv:4, repeats:2 };
 
   // presets data
   const PRESETS = [
@@ -144,13 +144,14 @@
   }
 
   // list rendering + CRUD
-  function addItem(bpm=NEW_DEFAULT.bpm, durationSec=NEW_DEFAULT.durationSec, beats=NEW_DEFAULT.beats, subdiv=NEW_DEFAULT.subdiv){
+  function addItem(bpm=NEW_DEFAULT.bpm, durationSec=NEW_DEFAULT.durationSec, beats=NEW_DEFAULT.beats, subdiv=NEW_DEFAULT.subdiv, repeats=NEW_DEFAULT.repeats){
     const id = nextId++;
-    const item = { id, bpm, durationSec, enabled:true, beats, subdiv };
+    const item = { id, bpm, durationSec, enabled:true, beats, subdiv, repeats };
     items.push(item);
     renderList();
     return item;
   }
+
   function clearItems(){ items = []; renderList(); }
   function removeItem(id){ items = items.filter(i=>i.id!==id); renderList(); }
 
@@ -196,6 +197,15 @@
       const beatsInput = document.createElement('input'); beatsInput.type='number'; beatsInput.value=it.beats; beatsInput.min=1; beatsInput.max=12; beatsInput.style.width='64px';
       beatsInput.addEventListener('change', ()=> it.beats = Math.max(1, Math.min(12, parseInt(beatsInput.value||4))));
       subdivField.appendChild(subdivSel); subdivField.appendChild(beatsInput);
+
+      // Repeats field
+      const repeatsField = document.createElement('div'); repeatsField.className='field';
+      const repeatsLabel = document.createElement('div'); repeatsLabel.className='small'; repeatsLabel.textContent='Повт.';
+      const repeatsInput = document.createElement('input'); repeatsInput.type='number'; repeatsInput.value = it.repeats || 1;
+      repeatsInput.min = 1; repeatsInput.max = 10; repeatsInput.style.width = '64px';
+      repeatsInput.addEventListener('change', ()=> it.repeats = Math.max(1, Math.min(10, parseInt(repeatsInput.value||1))));
+      repeatsField.appendChild(repeatsLabel); repeatsField.appendChild(repeatsInput);
+      center.appendChild(repeatsField);
 
       // enabled
       const enabledField = document.createElement('div'); enabledField.className='field';
@@ -265,9 +275,12 @@
     runner.currentSubdivisionIdx = 0;
     runner.nextNoteTime = ctx.currentTime + 0.05;
     runner.itemEndTime = ctx.currentTime + it.durationSec;
+    // количество оставшихся повторов (повторять ещё N раз после первого проигрыша)
+    runner.currentRepeatRemaining = (it.repeats || 1) - 1;
     highlightRunningItem(it.id);
     scheduleLoop();
   }
+
 
   function highlightRunningItem(id){
     unmarkRunningItem();
@@ -302,12 +315,24 @@
     if(!runner.running) return;
     schedule();
     if(ctx.currentTime >= runner.itemEndTime){
-      runner.index++;
-      runNextItem();
-      return;
+      if(runner.currentRepeatRemaining > 0){
+        // повторяем тот же элемент: сбрасываем время и продолжаем
+        runner.currentRepeatRemaining--;
+        runner.currentSubdivisionIdx = 0;
+        runner.nextNoteTime = ctx.currentTime + 0.05;
+        runner.itemEndTime = ctx.currentTime + (items[runner.index].durationSec || NEW_DEFAULT.durationSec);
+        // не меняем runner.index
+        runner.schedulerId = setTimeout(scheduleLoop, lookahead);
+        return;
+      } else {
+        runner.index++;
+        runNextItem();
+        return;
+      }
     }
     runner.schedulerId = setTimeout(scheduleLoop, lookahead);
   }
+
 
   // presets UI
   function renderPresets(){
@@ -331,7 +356,7 @@
     if(!p) return;
     items = [];
     nextId = 1;
-    p.items.forEach(it => addItem(it.bpm, it.durationSec, it.beats || 4, it.subdiv || 1));
+    p.items.forEach(it => addItem(it.bpm, it.durationSec, it.beats || 4, it.subdiv || 1, it.repeats || NEW_DEFAULT.repeats));
     renderList();
     statusLabel.textContent = `Загружен ${p.name}`;
   }
