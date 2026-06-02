@@ -1,444 +1,241 @@
-<!doctype html>
+﻿<!DOCTYPE html>
 <html lang="ru">
+
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Тренировка с метрономом — тёмная тема</title>
-<style>
-  :root{
-    --bg:#061018; --panel:#0d1418; --muted:#8b97a0; --accent:#7ce3ff; --accent-2:#ffb86b;
-    --glass: rgba(255,255,255,0.03); --radius:12px;
-    --input-bg:#0b1114; --select-bg:#0b1114; --input-border:rgba(255,255,255,0.04);
-  }
-  *{box-sizing:border-box;font-family:Inter,Segoe UI,Roboto,system-ui,Arial,sans-serif}
-  body{margin:0; min-height:100vh; background:linear-gradient(#041018,#07111a); color:#eaf2f6; padding:24px; display:flex; justify-content:center}
-  .wrap{width:1000px; max-width:96vw; display:flex; gap:16px}
-  h1{margin:0 0 14px 0; font-size:20px}
-  .panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),var(--panel)); border-radius:14px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,0.6)}
-  .left{width:220px}
-  .presets{display:flex; flex-direction:column; gap:8px}
-  .preset-btn{padding:10px; border-radius:10px; background:transparent; border:1px solid rgba(255,255,255,0.03); color:var(--muted); cursor:pointer; text-align:left}
-  .preset-btn.active{background:linear-gradient(90deg,rgba(124,227,255,0.06),rgba(255,184,106,0.04)); color:#eaf2f6; border-color:rgba(124,227,255,0.12)}
-  .controls{display:flex; gap:10px; align-items:center; margin-bottom:12px}
-  .btn{background:linear-gradient(90deg,var(--accent),#5ed3ff); border:none; color:#042026; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:700}
-  .btn.ghost{background:transparent; color:var(--accent); border:1px solid rgba(124,227,255,0.12)}
-  .small{font-size:13px; color:var(--muted)}
-  .list{margin-top:12px; display:flex; flex-direction:column; gap:8px; max-height:56vh; overflow:auto}
-  .item{display:flex; gap:10px; align-items:center; padding:10px; border-radius:10px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03)}
-  .item .leftIdx{width:40px; text-align:center; color:var(--muted); font-weight:700}
-  .item .center{flex:1; display:flex; align-items:center; gap:12px}
-  .field{display:flex; gap:6px; align-items:center}
-  input[type=number], input[type=text], select{
-    background:var(--input-bg); color:inherit; border:1px solid var(--input-border); padding:8px 10px; border-radius:8px;
-  }
-  select { background:var(--select-bg); color:inherit; border:1px solid var(--input-border); }
-  .time-display{min-width:110px; text-align:center; font-weight:700}
-  .running{outline:2px solid rgba(124,227,255,0.08); box-shadow:0 6px 18px rgba(0,0,0,0.5)}
-  .footer{display:flex; justify-content:space-between; align-items:center; margin-top:12px}
-  .pulse{width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--accent-2); background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0.02))}
-  @media (max-width:980px){ .wrap{flex-direction:column} .left{width:100%} }
-  .pulse-on{transform:scale(1.14); transition:transform 0.04s ease;}
-  .ghost-small{background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); padding:8px 10px; border-radius:8px; cursor:pointer}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+
+    <title>Metronome Playlist</title>
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
+
+    <link rel="icon" type="image/png" href="assets/icon-192.png">
 </head>
+
 <body>
-<div class="wrap">
-  <div class="left panel">
-    <h1>Пресеты</h1>
-    <div class="presets" id="presets"></div>
-    <div style="margin-top:12px">
-      <button id="savePreset" class="ghost-small">Сохранить текущий как пресет</button>
+
+    <div class="app">
+
+        <header class="topbar">
+            <div>
+                <h1>🎵 Metronome Playlist</h1>
+                <p class="subtitle">
+                    Тренировки, упражнения и разогрев в одном плейлисте
+                </p>
+            </div>
+
+            <!-- <div class="header-actions">
+                <button id="exportBtn" class="secondary">
+                    Export
+                </button>
+
+                <label class="secondary file-btn">
+                    Import
+                    <input type="file" id="importFile" accept=".json" hidden>
+                </label>
+            </div> -->
+        </header>
+
+        <section class="now-playing card">
+
+            <div class="np-left">
+
+                <div class="bpm-circle">
+                    <svg viewBox="0 0 120 120">
+                        <circle cx="60" cy="60" r="52" class="bg-ring">
+                        </circle>
+
+                        <circle cx="60" cy="60" r="52" class="progress-ring" id="currentProgressRing">
+                        </circle>
+                    </svg>
+
+                    <div class="circle-content">
+                        <span id="currentBpm">--</span>
+                        <small>BPM</small>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="np-center">
+
+                <div class="stats-grid">
+
+                    <div class="stat">
+                        <span>Элемент</span>
+                        <strong id="currentIndex">
+                            -
+                        </strong>
+                    </div>
+
+                    <div class="stat">
+                        <span>Повтор</span>
+                        <strong id="currentRepeat">
+                            -
+                        </strong>
+                    </div>
+
+                    <div class="stat">
+                        <span>Осталось</span>
+                        <strong id="timeLeft">
+                            -
+                        </strong>
+                    </div>
+
+                    <div class="stat">
+                        <span>Деление</span>
+                        <strong id="currentSubdivision">
+                            -
+                        </strong>
+                    </div>
+
+                </div>
+
+                <div class="beat-display" id="beatDisplay">
+                    -
+                </div>
+
+                <div class="playlist-progress">
+                    <div class="playlist-progress-bar" id="playlistProgressBar">
+                    </div>
+                </div>
+
+                <div class="playlist-progress-text" id="playlistProgressText">
+                    0%
+                </div>
+
+            </div>
+
+        </section>
+
+        <section class="controls card">
+
+            <button id="startBtn" class="primary">
+                ▶ Start
+            </button>
+
+            <button id="pauseBtn" class="secondary">
+                ⏸ Pause
+            </button>
+
+            <button id="stopBtn" class="danger">
+                ⏹ Stop
+            </button>
+
+            <button id="addItemBtn" class="success">
+                ＋ Add
+            </button>
+
+        </section>
+
+        <section class="summary card">
+
+            <div>
+                <span>Общая длительность</span>
+                <strong id="totalDuration">
+                    00:00
+                </strong>
+            </div>
+
+            <div>
+                <span>Количество этапов</span>
+                <strong id="totalItems">
+                    0
+                </strong>
+            </div>
+
+        </section>
+
+        <section class="presets card">
+
+            <div class="preset-buttons">
+
+                <button data-preset="warmup">
+                    Warmup
+                </button>
+
+                <button data-preset="speed">
+                    Speed Builder
+                </button>
+
+                <button data-preset="practice">
+                    Practice
+                </button>
+
+            </div>
+
+        </section>
+
+        <section class="playlist card">
+
+            <div class="section-title">
+                Playlist
+            </div>
+
+            <div id="playlistContainer" class="playlist-container">
+            </div>
+
+        </section>
+
+
+
     </div>
-  </div>
 
-  <div class="panel" style="flex:1">
-    <h1>Тренировка с метрономом — тёмная тема</h1>
+    <template id="playlistItemTemplate">
 
-    <div class="controls">
-      <button class="btn" id="addBtn">Добавить метроном</button>
-      <button class="btn ghost" id="startAll">Запустить плейлист</button>
-      <button class="btn ghost" id="stopAll">Остановить</button>
-      <div style="margin-left:auto" class="small">Клик: одинаковый звук для всех ударов</div>
-    </div>
+        <div class="playlist-item">
 
-    <div class="list" id="list"></div>
+            <div class="drag-handle">
+                ☰
+            </div>
 
-    <div class="footer">
-      <div class="small">Примеры: 80 bpm 1:00 → 85 bpm 0:30 → 90 bpm 0:15</div>
-      <div style="display:flex; gap:10px; align-items:center">
-        <div class="pulse" id="globalPulse">—</div>
-        <div style="display:flex; flex-direction:column; align-items:flex-start">
-          <div class="small" id="statusLabel">Ожидание</div>
-          <div class="small" id="remainingTime">—</div>
+            <input class="bpm-input" type="number" min="20" max="400">
+
+            <input class="duration-input" type="number" min="1">
+
+            <input class="repeat-input" type="number" min="1">
+
+            <select class="subdivision-select">
+
+                <option value="quarter">
+                    Quarter
+                </option>
+
+                <option value="eighth">
+                    Eighth
+                </option>
+
+                <option value="triplet">
+                    Triplet
+                </option>
+
+                <option value="sixteenth">
+                    Sixteenth
+                </option>
+
+            </select>
+
+            <button class="delete-btn">
+                ✕
+            </button>
+
         </div>
-      </div>
-    </div>
-  </div>
-</div>
 
-<script>
-/*
-Обновлённый файл:
-- поле repeats (Повт.) с дефолтным 2
-- отображение оставшегося времени текущего интервала
-- пауза pauseDuration (5s) между завершением и повтором и между интервалами
-- masterGain + ctx.resume для надёжного звука
-- исправлены логика планировщика и сбросы таймеров
-*/
+    </template>
 
-(function(){
-  const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  let ctx = null;
-  let masterGain = null;
-  const lookahead = 25.0;
-  const scheduleAheadTime = 0.1;
+    <script src="app.js"></script>
 
-  // UI
-  const listEl = document.getElementById('list');
-  const addBtn = document.getElementById('addBtn');
-  const startAllBtn = document.getElementById('startAll');
-  const stopAllBtn = document.getElementById('stopAll');
-  const statusLabel = document.getElementById('statusLabel');
-  const globalPulse = document.getElementById('globalPulse');
-  const presetsEl = document.getElementById('presets');
-  const savePresetBtn = document.getElementById('savePreset');
-  const remainingTimeEl = document.getElementById('remainingTime');
-
-  // state
-  let items = []; // {id,bpm,durationSec,enabled,beats,subdiv,repeats}
-  let nextId = 1;
-
-  // runner
-  let runner = {
-    running:false,
-    index:0,
-    itemEndTime:0,
-    schedulerId:null,
-    nextNoteTime:0,
-    currentSubdivisionIdx:0,
-    subdivision:1,
-    volume:0.8,
-    tempo:120,
-    beatsPerMeasure:4,
-    inPause:false,
-    pauseDuration:5.0,
-    repeatPending:false,
-    currentRepeatRemaining:0
-  };
-
-  const NEW_DEFAULT = { bpm:100, durationSec:60, beats:4, subdiv:4, repeats:2 };
-
-  const PRESETS = [
-    {
-      name: 'Тренировка 1',
-      items: [
-        { bpm:70, durationSec:120, beats:4, subdiv:4, repeats:2 },
-        { bpm:80, durationSec:90, beats:4, subdiv:4, repeats:2 },
-        { bpm:90, durationSec:60, beats:4, subdiv:4, repeats:2 },
-        { bpm:100, durationSec:30, beats:4, subdiv:4, repeats:2 },
-      ]
-    },
-    {
-      name: 'Тренировка 2',
-      items: [
-        { bpm:80, durationSec:90, beats:4, subdiv:4, repeats:2 },
-        { bpm:90, durationSec:60, beats:4, subdiv:4, repeats:2 },
-        { bpm:100, durationSec:45, beats:4, subdiv:4, repeats:2 },
-        { bpm:110, durationSec:30, beats:4, subdiv:4, repeats:2 },
-      ]
-    }
-  ];
-
-  function pad(n){ return n<10?('0'+n):(''+n); }
-  function formatTime(sec){ return `${Math.floor(sec/60)}:${pad(sec%60)}`; }
-  function parseTimeString(s){
-    s = (''+s).trim();
-    const m = s.match(/^(\d+):(\d{1,2})$/);
-    if(m) return parseInt(m[1])*60 + parseInt(m[2]);
-    const mm = s.match(/^(\d+)$/); if(mm) return parseInt(mm[1]);
-    return null;
-  }
-
-  function ensureCtx(){
-    if(!ctx) ctx = new AudioCtx();
-    if(!masterGain && ctx){
-      masterGain = ctx.createGain();
-      masterGain.gain.value = 1;
-      masterGain.connect(ctx.destination);
-    }
-  }
-
-  function addItem(bpm=NEW_DEFAULT.bpm, durationSec=NEW_DEFAULT.durationSec, beats=NEW_DEFAULT.beats, subdiv=NEW_DEFAULT.subdiv, repeats=NEW_DEFAULT.repeats){
-    const id = nextId++;
-    const item = { id, bpm, durationSec, enabled:true, beats, subdiv, repeats };
-    items.push(item);
-    renderList();
-    return item;
-  }
-  function clearItems(){ items = []; renderList(); }
-  function removeItem(id){ items = items.filter(i=>i.id!==id); renderList(); }
-
-  function renderList(){
-    listEl.innerHTML = '';
-    items.forEach((it, idx) => {
-      const row = document.createElement('div');
-      row.className = 'item';
-      row.dataset.id = it.id;
-
-      const left = document.createElement('div');
-      left.className = 'leftIdx';
-      left.textContent = (idx+1);
-
-      const center = document.createElement('div');
-      center.className = 'center';
-
-      const bpmField = document.createElement('div'); bpmField.className='field';
-      const bpmLabel = document.createElement('div'); bpmLabel.className='small'; bpmLabel.textContent='BPM';
-      const bpmInput = document.createElement('input'); bpmInput.type='number'; bpmInput.value=it.bpm; bpmInput.min=30; bpmInput.max=300;
-      bpmInput.addEventListener('change', ()=> { it.bpm = Math.max(30, Math.min(300, parseInt(bpmInput.value||NEW_DEFAULT.bpm))); bpmInput.value = it.bpm; });
-      bpmField.appendChild(bpmLabel); bpmField.appendChild(bpmInput);
-
-      const durField = document.createElement('div'); durField.className='field';
-      const durLabel = document.createElement('div'); durLabel.className='small'; durLabel.textContent='Время';
-      const durInput = document.createElement('input'); durInput.type='text'; durInput.value = formatTime(it.durationSec);
-      durInput.title = 'MM:SS';
-      durInput.addEventListener('change', ()=> {
-        const v = parseTimeString(durInput.value);
-        if(v==null){ durInput.value = formatTime(it.durationSec); return; }
-        it.durationSec = v;
-        durInput.value = formatTime(v);
-      });
-      durField.appendChild(durLabel); durField.appendChild(durInput);
-
-      const subdivField = document.createElement('div'); subdivField.className='field';
-      const subdivSel = document.createElement('select');
-      [1,2,3,4].forEach(s=> { const o=document.createElement('option'); o.value=s; o.textContent=`${s}x`; if(s===it.subdiv) o.selected=true; subdivSel.appendChild(o); });
-      subdivSel.addEventListener('change', ()=> it.subdiv = parseInt(subdivSel.value));
-      const beatsInput = document.createElement('input'); beatsInput.type='number'; beatsInput.value=it.beats; beatsInput.min=1; beatsInput.max=12; beatsInput.style.width='64px';
-      beatsInput.addEventListener('change', ()=> it.beats = Math.max(1, Math.min(12, parseInt(beatsInput.value||4))));
-      subdivField.appendChild(subdivSel); subdivField.appendChild(beatsInput);
-
-      const repeatsField = document.createElement('div'); repeatsField.className='field';
-      const repeatsLabel = document.createElement('div'); repeatsLabel.className='small'; repeatsLabel.textContent='Повт.';
-      const repeatsInput = document.createElement('input'); repeatsInput.type='number'; repeatsInput.value = it.repeats || 1;
-      repeatsInput.min = 1; repeatsInput.max = 20; repeatsInput.style.width = '64px';
-      repeatsInput.addEventListener('change', ()=> it.repeats = Math.max(1, Math.min(20, parseInt(repeatsInput.value||1))));
-      repeatsField.appendChild(repeatsLabel); repeatsField.appendChild(repeatsInput);
-
-      const enabledField = document.createElement('div'); enabledField.className='field';
-      const enabledLabel = document.createElement('label'); enabledLabel.className='small';
-      const enabledCheckbox = document.createElement('input'); enabledCheckbox.type='checkbox'; enabledCheckbox.checked = it.enabled;
-      enabledCheckbox.addEventListener('change', ()=> it.enabled = enabledCheckbox.checked);
-      enabledLabel.appendChild(enabledCheckbox); enabledLabel.appendChild(document.createTextNode(' Вкл'));
-      enabledField.appendChild(enabledLabel);
-
-      center.appendChild(bpmField); center.appendChild(durField); center.appendChild(subdivField); center.appendChild(repeatsField); center.appendChild(enabledField);
-
-      const right = document.createElement('div'); right.style.display='flex'; right.style.gap='8px'; right.style.alignItems='center';
-      const timeDisplay = document.createElement('div'); timeDisplay.className='time-display small'; timeDisplay.textContent = formatTime(it.durationSec);
-      const deleteBtn = document.createElement('button'); deleteBtn.className = 'btn ghost'; deleteBtn.textContent='Удалить';
-      deleteBtn.addEventListener('click', ()=> removeItem(it.id));
-      right.appendChild(timeDisplay); right.appendChild(deleteBtn);
-
-      row.appendChild(left); row.appendChild(center); row.appendChild(right);
-      listEl.appendChild(row);
-    });
-  }
-
-  function playClickAt(time, volume=0.8){
-    if(!ctx || !masterGain) return;
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = 'sine';
-    o.frequency.value = 1000;
-    g.gain.setValueAtTime(0.0001, time);
-    g.gain.linearRampToValueAtTime(volume, time + 0.001);
-    g.gain.exponentialRampToValueAtTime(0.001, time + 0.06);
-    o.connect(g);
-    g.connect(masterGain);
-    o.start(time);
-    o.stop(time + 0.07);
-  }
-
-  function startPlaylist(){
-    if(runner.running) return;
-    if(items.length===0){ statusLabel.textContent='Список пуст'; return; }
-    ensureCtx();
-    ctx.resume && ctx.resume();
-    if(masterGain){
-      masterGain.gain.cancelScheduledValues(ctx.currentTime);
-      masterGain.gain.setValueAtTime(1, ctx.currentTime + 0.001);
-    }
-    runner.running = true;
-    runner.index = 0;
-    statusLabel.textContent = 'Запущено';
-    runNextItem();
-    updateRemainingDisplay();
-  }
-
-  function stopPlaylist(){
-    runner.running = false;
-    if(runner.schedulerId){ clearTimeout(runner.schedulerId); runner.schedulerId = null; }
-    if(masterGain && ctx){
-      masterGain.gain.cancelScheduledValues(ctx.currentTime);
-      masterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    }
-    statusLabel.textContent = 'Остановлено';
-    globalPulse.textContent = '—';
-    remainingTimeEl.textContent = '—';
-    unmarkRunningItem();
-  }
-
-  function runNextItem(){
-    if(!runner.running) return;
-    runner.inPause = false;
-    runner.repeatPending = false;
-    while(runner.index < items.length && !items[runner.index].enabled) runner.index++;
-    if(runner.index >= items.length){ stopPlaylist(); statusLabel.textContent = 'Завершено'; return; }
-    const it = items[runner.index];
-    runner.tempo = it.bpm;
-    runner.subdivision = it.subdiv || 1;
-    runner.beatsPerMeasure = it.beats || 4;
-    runner.currentSubdivisionIdx = 0;
-    runner.nextNoteTime = (ctx ? ctx.currentTime : 0) + 0.05;
-    runner.itemEndTime = (ctx ? ctx.currentTime : 0) + it.durationSec;
-    runner.currentRepeatRemaining = (it.repeats || 1) - 1;
-    highlightRunningItem(it.id);
-    statusLabel.textContent = `Играет ${it.bpm} bpm`;
-    updateRemainingDisplay();
-    scheduleLoop();
-  }
-
-  function highlightRunningItem(id){
-    unmarkRunningItem();
-    const row = listEl.querySelector(`.item[data-id="${id}"]`);
-    if(row) row.classList.add('running');
-  }
-  function unmarkRunningItem(){
-    const prev = listEl.querySelectorAll('.item.running');
-    prev.forEach(p=>p.classList.remove('running'));
-  }
-
-  function schedule(){
-    if(runner.inPause) return;
-    while(runner.nextNoteTime < (ctx.currentTime + scheduleAheadTime)){
-      playClickAt(runner.nextNoteTime, runner.volume);
-      (function(noteTime){
-        const noteIdx = runner.currentSubdivisionIdx;
-        const delay = Math.max(0, (noteTime - ctx.currentTime) * 1000);
-        setTimeout(()=> {
-          globalPulse.classList.add('pulse-on');
-          globalPulse.textContent = '' + (noteIdx % runner.beatsPerMeasure + 1);
-          setTimeout(()=> globalPulse.classList.remove('pulse-on'), 80);
-        }, delay);
-      })(runner.nextNoteTime);
-
-      const secondsPerBeat = 60.0 / runner.tempo;
-      runner.nextNoteTime += secondsPerBeat / runner.subdivision;
-      runner.currentSubdivisionIdx++;
-    }
-  }
-
-  function scheduleLoop(){
-    if(!runner.running) return;
-    updateRemainingDisplay();
-    schedule();
-    if((ctx ? ctx.currentTime : 0) >= runner.itemEndTime){
-      if(runner.inPause){
-        runner.inPause = false;
-        if(runner.repeatPending){
-          const it = items[runner.index];
-          runner.currentSubdivisionIdx = 0;
-          runner.nextNoteTime = (ctx ? ctx.currentTime : 0) + 0.05;
-          runner.itemEndTime = (ctx ? ctx.currentTime : 0) + (it.durationSec || NEW_DEFAULT.durationSec);
-          statusLabel.textContent = `Повтор ${it.bpm} bpm`;
-          runner.repeatPending = false;
-          runner.schedulerId = setTimeout(scheduleLoop, lookahead);
-          return;
-        } else {
-          runner.index++;
-          runNextItem();
-          return;
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker
+                    .register('./service-worker.js');
+            });
         }
-      }
+    </script>
 
-      if(runner.currentRepeatRemaining > 0){
-        runner.currentRepeatRemaining--;
-        runner.inPause = true;
-        runner.repeatPending = true;
-        runner.itemEndTime = (ctx ? ctx.currentTime : 0) + runner.pauseDuration;
-        statusLabel.textContent = `Пауза перед повтором ${runner.pauseDuration}s`;
-        globalPulse.textContent = '—';
-        runner.schedulerId = setTimeout(scheduleLoop, lookahead);
-        return;
-      } else {
-        runner.inPause = true;
-        runner.repeatPending = false;
-        runner.itemEndTime = (ctx ? ctx.currentTime : 0) + runner.pauseDuration;
-        statusLabel.textContent = `Пауза ${runner.pauseDuration}s`;
-        globalPulse.textContent = '—';
-        runner.schedulerId = setTimeout(scheduleLoop, lookahead);
-        return;
-      }
-    }
-    runner.schedulerId = setTimeout(scheduleLoop, lookahead);
-  }
-
-  function updateRemainingDisplay(){
-    if(!remainingTimeEl) return;
-    if(!runner.running || !ctx){ remainingTimeEl.textContent = '—'; return; }
-    const now = ctx.currentTime;
-    const remaining = Math.max(0, Math.ceil(runner.itemEndTime - now));
-    if(runner.inPause){
-      remainingTimeEl.textContent = `Пауза ${remaining}s`;
-    } else {
-      remainingTimeEl.textContent = `Осталось ${remaining}s`;
-    }
-  }
-
-  function renderPresets(){
-    presetsEl.innerHTML = '';
-    PRESETS.forEach((p, idx) => {
-      const btn = document.createElement('button');
-      btn.className = 'preset-btn';
-      btn.textContent = p.name;
-      btn.addEventListener('click', ()=> { loadPreset(idx); markActivePreset(idx); });
-      presetsEl.appendChild(btn);
-    });
-    markActivePreset(0);
-  }
-  function markActivePreset(idx){
-    const btns = presetsEl.querySelectorAll('.preset-btn');
-    btns.forEach((b,i)=> b.classList.toggle('active', i===idx));
-  }
-  function loadPreset(idx){
-    const p = PRESETS[idx];
-    if(!p) return;
-    items = [];
-    nextId = 1;
-    p.items.forEach(it => addItem(it.bpm, it.durationSec, it.beats || 4, it.subdiv || 1, it.repeats || NEW_DEFAULT.repeats));
-    renderList();
-    statusLabel.textContent = `Загружен ${p.name}`;
-  }
-
-  savePresetBtn.addEventListener('click', ()=>{
-    const name = prompt('Название пресета', 'Новый пресет');
-    if(!name) return;
-    const preset = { name, items: items.map(it=>({ bpm: it.bpm, durationSec: it.durationSec, beats: it.beats, subdiv: it.subdiv, repeats: it.repeats })) };
-    PRESETS.push(preset);
-    renderPresets();
-    statusLabel.textContent = `Сохранён пресет "${name}"`;
-  });
-
-  addBtn.addEventListener('click', ()=> { addItem(); });
-  startAllBtn.addEventListener('click', ()=> { startPlaylist(); });
-  stopAllBtn.addEventListener('click', ()=> { stopPlaylist(); });
-  window.addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); runner.running ? stopPlaylist() : startPlaylist(); } });
-
-  renderPresets();
-  loadPreset(0);
-
-})();
-</script>
 </body>
+
 </html>
