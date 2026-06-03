@@ -101,6 +101,15 @@ const PRESETS = {
         }
     ],
 
+    sticks: [
+        {
+            bpm: 70,
+            duration: 60,
+            repeats: 16,
+            subdivision: "sixteenth"
+        }
+    ],
+
     speed: [
         {
             bpm: 80,
@@ -335,17 +344,15 @@ function createClick(frequency, volume, when, duration = 0.03) {
 
     osc.type = "sine";
     osc.frequency.value = frequency;
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
     gain.gain.setValueAtTime(volume, when);
     gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
-}
-
-function strongBeat() {
-    createClick(900, 0.25);
-}
-
-function weakBeat() {
-    // createClick(900, 0.12);
-    createClick(900, 0.25);
+    
+    osc.start(when);
+    osc.stop(when + duration);
 }
 
 // =========================
@@ -442,7 +449,7 @@ function updatePlaylistProgress() {
 // Metronome
 // =========================
 
-function scheduleBeat(item, strong) {
+function scheduleBeat(time, strong) {
     if (strong) {
         createClick(900, 0.25, time);
     } else {
@@ -450,7 +457,7 @@ function scheduleBeat(item, strong) {
     }
 }
 
-function scheduler(time) {
+function scheduler(item) {
     const ctx = getAudioContext();
     const factor = getSubdivisionFactor(item.subdivision);
     const secondsPerStep = (60 / item.bpm) / factor;
@@ -458,6 +465,7 @@ function scheduler(time) {
     while (nextNoteTime < ctx.currentTime + SCHEDULE_AHEAD_TIME) {
         const strong = subdivisionCounter % factor === 0;
         scheduleBeat(nextNoteTime, strong);
+        beatDisplayEl.textContent = subdivisionLabel(item.subdivision, beatCounter);
 
         nextNoteTime += secondsPerStep;
 
@@ -467,10 +475,9 @@ function scheduler(time) {
 }
 
 function startMetronomeForItem(item) {
-    clearInterval(metronomeTimer);
+    clearInterval(schedulerTimer);
 
-    beatCounter = 0;
-    subdivisionCounter = 0;
+   
 
     const ctx = getAudioContext();
     nextNoteTime = ctx.currentTime + 0.05;
@@ -487,7 +494,7 @@ function startMetronomeForItem(item) {
 // =========================
 
 function playCurrentItem() {
-    clearInterval(metronomeTimer);
+    clearInterval(schedulerTimer);
     clearInterval(countdownTimer);
     clearTransition();
 
@@ -514,7 +521,7 @@ function playCurrentItem() {
 
         if (currentRemainingSeconds <= 0) {
             clearInterval(countdownTimer);
-            clearInterval(metronomeTimer);
+            clearInterval(schedulerTimer);
 
             if (currentRepeat < item.repeats) {
                 currentRepeat++;
@@ -583,6 +590,7 @@ function pausePlaylist() {
         stopMetronome();
         beatDisplayEl.textContent = "PAUSED";
     } else {
+        beatDisplayEl.textContent = "-";
         const item = playlist[currentItemIndex];
         if (item) {
             startMetronomeForItem(item);
@@ -595,7 +603,7 @@ function stopPlaylist() {
     isPaused = false;
 
     clearTransition();
-    clearInterval(metronomeTimer);
+    clearInterval(schedulerTimer);
     clearInterval(countdownTimer);
 
     stopMetronome();
