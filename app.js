@@ -1,11 +1,5 @@
-﻿
-// =========================
-// Metronome Playlist
-// Part 1
-// =========================
-
+﻿// Metronome Playlist
 const STORAGE_KEY = "metronome_playlist_v1";
-
 const DEFAULT_PLAYLIST = [
     {
         bpm: 70,
@@ -46,17 +40,12 @@ let currentRemainingSeconds = 0;
 let playlistTotalSeconds = 0;
 let playlistElapsedSeconds = 0;
 
-// =========================
 // DOM
-// =========================
-
 const playlistContainer = document.getElementById("playlistContainer");
 const addItemBtn = document.getElementById("addItemBtn");
 const startBtn = document.getElementById("startBtn");
 const pauseBtn = document.getElementById("pauseBtn");
 const stopBtn = document.getElementById("stopBtn");
-const exportBtn = document.getElementById("exportBtn");
-const importFile = document.getElementById("importFile");
 const currentBpmEl = document.getElementById("currentBpm");
 const currentIndexEl = document.getElementById("currentIndex");
 const currentRepeatEl = document.getElementById("currentRepeat");
@@ -68,12 +57,8 @@ const totalItemsEl = document.getElementById("totalItems");
 const playlistProgressBar = document.getElementById("playlistProgressBar");
 const progressRing = document.getElementById("currentProgressRing");
 
-// =========================
 // Presets
-// =========================
-
 const PRESETS = {
-
     warmup: [
         {
             bpm: 70,
@@ -100,7 +85,6 @@ const PRESETS = {
             subdivision: "sixteenth"
         }
     ],
-
     sticks: [
         {
             bpm: 70,
@@ -109,7 +93,6 @@ const PRESETS = {
             subdivision: "sixteenth"
         }
     ],
-
     speed: [
         {
             bpm: 80,
@@ -136,7 +119,6 @@ const PRESETS = {
             subdivision: "sixteenth"
         }
     ],
-
     practice: [
         {
             bpm: 70,
@@ -159,10 +141,7 @@ const PRESETS = {
     ]
 };
 
-// =========================
 // Storage
-// =========================
-
 function loadPlaylist() {
     const saved = localStorage.getItem(STORAGE_KEY);
 
@@ -181,10 +160,7 @@ function savePlaylist() {
     updateSummary();
 }
 
-// =========================
 // Helpers
-// =========================
-
 function formatTime(totalSeconds) {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
@@ -205,10 +181,7 @@ function updateSummary() {
     totalItemsEl.textContent = playlist.length;
 }
 
-// =========================
 // Render Playlist
-// =========================
-
 function renderPlaylist() {
     playlistContainer.innerHTML = "";
     const template = document.getElementById("playlistItemTemplate");
@@ -258,10 +231,7 @@ function renderPlaylist() {
     updateSummary();
 }
 
-// =========================
 // Add Item
-// =========================
-
 function addPlaylistItem() {
     playlist.push({ bpm: 100, duration: 60, repeats: 2, subdivision: "sixteenth" });
 
@@ -271,10 +241,7 @@ function addPlaylistItem() {
 
 addItemBtn.addEventListener("click", addPlaylistItem);
 
-// =========================
 // Presets
-// =========================
-
 document
     .querySelectorAll("[data-preset]")
     .forEach(button => {
@@ -286,47 +253,58 @@ document
         });
     });
 
-// =========================
 // Initial render
-// =========================
-
 renderPlaylist();
 updateSummary();
 
-
-// =========================
-// Part 2
 // Audio Engine + Playback
-// =========================
-
 let audioContext = null;
 
-let metronomeTimer = null;
-let countdownTimer = null;
-
+// Transport State
 let beatCounter = 0;
 let subdivisionCounter = 0;
 
-let pausedAt = null;
-let resumeTimeout = null;
-let transitionTimeout = null;
-
 let schedulerTimer = null;
+let transitionTimeout = null;
+let animationFrameId = null;
+
+// Audio scheduler
 let nextNoteTime = 0;
+
 const LOOKAHEAD = 25;
 const SCHEDULE_AHEAD_TIME = 0.1;
 
+// Current item timing
+let itemStartAudioTime = 0;
+let itemEndAudioTime = 0;
+
+let pausedRemaining = 0;
+
+// Pause between playlist items
+let pendingTransition = false;
+let pendingTransitionDelay = 0;
+let transitionStartedAt = 0;
+
+// Beat display sync
+let currentBeatLabel = "-";
+let currentBeatTime = 0;
+
+let scheduledBeats = [];
+let displayedBeatIndex = -1;
+
+// Ring
 const RING_LENGTH = 327;
 
-// =========================
 // Audio
-// =========================
-
 function clearTransition() {
     if (transitionTimeout) {
         clearTimeout(transitionTimeout);
         transitionTimeout = null;
     }
+
+    pendingTransition = false;
+    pendingTransitionDelay = 0;
+    transitionStartedAt = 0;
 }
 
 function getAudioContext() {
@@ -350,15 +328,57 @@ function createClick(frequency, volume, when, duration = 0.03) {
 
     gain.gain.setValueAtTime(volume, when);
     gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
-    
+
     osc.start(when);
     osc.stop(when + duration);
 }
 
-// =========================
-// Subdivisions
-// =========================
+function clearAllTimers() {
+    clearInterval(schedulerTimer);
+    schedulerTimer = null;
+    clearTransition();
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+}
 
+function startRestTransition(callback, delay = 5000) {
+    pendingTransition = true;
+    pendingTransitionDelay = delay;
+    transitionStartedAt = performance.now();
+
+    beatDisplayEl.textContent = "REST";
+
+    scheduledBeats = [];
+    displayedBeatIndex = -1;
+
+    transitionTimeout = setTimeout(() => {
+        pendingTransition = false;
+        pendingTransitionDelay = 0;
+        if (!isPlaying || isPaused) {
+            return;
+        }
+        callback();
+    }, delay);
+}
+
+function calculateElapsedBeforeCurrentItem() {
+    let total = 0;
+    for (let i = 0; i < currentItemIndex; i++) {
+        total += playlist[i].duration * playlist[i].repeats;
+    }
+
+    return total;
+}
+
+function getCurrentItemProgress(item) {
+    const ctx = getAudioContext();
+    const elapsed = Math.max(0, ctx.currentTime - itemStartAudioTime);
+    const progress = Math.min(1, elapsed / item.duration);
+
+    return progress;
+}
+
+// Subdivisions
 function getSubdivisionFactor(subdivision) {
     switch (subdivision) {
         case "quarter":
@@ -400,9 +420,82 @@ function subdivisionLabel(subdivision, step) {
     return "-";
 }
 
-// =========================
 // UI Updates
-// =========================
+function finishCurrentItem() {
+    const item = playlist[currentItemIndex];
+
+    stopMetronome();
+
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+
+    beatDisplayEl.textContent = "REST";
+
+    if (currentRepeat < item.repeats) {
+        currentRepeat++;
+        transitionTimeout = setTimeout(() => {
+            if (!isPlaying || isPaused) return;
+            playCurrentItem();
+        }, 5000);
+    } else {
+        currentRepeat = 1;
+        currentItemIndex++;
+        transitionTimeout = setTimeout(() => {
+            if (!isPlaying || isPaused) return;
+            playCurrentItem();
+        }, 5000);
+
+    }
+}
+
+function updatePlaybackState() {
+    if (!isPlaying) return;
+    if (isPaused) return;
+
+    const item = playlist[currentItemIndex];
+    if (!item) return;
+
+    const ctx = getAudioContext();
+    const remaining = Math.max(0, itemEndAudioTime - ctx.currentTime);
+
+    currentRemainingSeconds = Math.ceil(remaining);
+
+    const elapsedInItem = Math.min(item.duration, Math.max(0, ctx.currentTime - itemStartAudioTime));
+
+    playlistElapsedSeconds = calculateElapsedBeforeCurrentItem() + ((currentRepeat - 1) * item.duration) + elapsedInItem;
+
+    while (scheduledBeats.length && ctx.currentTime >= scheduledBeats[0].time) {
+        const beat = scheduledBeats.shift();
+        beatDisplayEl.textContent = beat.label;
+        if (scheduledBeats.length > 100) {
+            scheduledBeats = scheduledBeats.slice(-20);
+        }
+    }
+
+    updateCurrentUI();
+
+    if (ctx.currentTime >= itemEndAudioTime) {
+        finishCurrentItem();
+        return;
+    }
+
+    animationFrameId = requestAnimationFrame(updatePlaybackState);
+}
+
+function finishCurrentItem() {
+    const item = playlist[currentItemIndex];
+    stopMetronome();
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+    if (currentRepeat < item.repeats) {
+        currentRepeat++;
+        startRestTransition(() => { playCurrentItem(); });
+    } else {
+        currentRepeat = 1;
+        currentItemIndex++;
+        startRestTransition(() => { playCurrentItem(); });
+    }
+}
 
 function updateCurrentUI() {
     const item = playlist[currentItemIndex];
@@ -422,33 +515,24 @@ function updateCurrentUI() {
     document
         .querySelectorAll(".playlist-item")
         .forEach((row, index) => {
-
             row.classList.toggle("active", index === currentItemIndex);
-
         });
 }
 
 function updateRingProgress(item) {
-    const ratio = currentRemainingSeconds / item.duration;
-    const offset = RING_LENGTH * ratio;
-
-    progressRing.style.strokeDashoffset = offset;
+    const progress = getCurrentItemProgress(item);
+    progressRing.style.strokeDashoffset = RING_LENGTH * (1 - progress);
 }
 
 function updatePlaylistProgress() {
     const percent = playlistTotalSeconds === 0 ? 0 : (playlistElapsedSeconds / playlistTotalSeconds) * 100;
-
     playlistProgressBar.style.width = percent + "%";
-
     const txt = document.getElementById("playlistProgressText");
-
     txt.textContent = percent.toFixed(0) + "%";
 }
 
-// =========================
-// Metronome
-// =========================
 
+// Metronome
 function scheduleBeat(time, strong) {
     if (strong) {
         createClick(900, 0.25, time);
@@ -464,9 +548,12 @@ function scheduler(item) {
 
     while (nextNoteTime < ctx.currentTime + SCHEDULE_AHEAD_TIME) {
         const strong = subdivisionCounter % factor === 0;
-        scheduleBeat(nextNoteTime, strong);
-        beatDisplayEl.textContent = subdivisionLabel(item.subdivision, beatCounter);
 
+        const label = subdivisionLabel(item.subdivision, beatCounter);
+
+        scheduleBeat(nextNoteTime, strong);
+
+        scheduledBeats.push({ time: nextNoteTime, label });
         nextNoteTime += secondsPerStep;
 
         subdivisionCounter++;
@@ -476,27 +563,19 @@ function scheduler(item) {
 
 function startMetronomeForItem(item) {
     clearInterval(schedulerTimer);
-
-   
-
     const ctx = getAudioContext();
     nextNoteTime = ctx.currentTime + 0.05;
 
     schedulerTimer = setInterval(() => {
-        if (!isPlaying || isPaused) return;
-
+        if (!isPlaying) return;
+        if (isPaused) return;
         scheduler(item);
     }, LOOKAHEAD);
 }
 
-// =========================
 // Playback Logic
-// =========================
-
 function playCurrentItem() {
     clearInterval(schedulerTimer);
-    clearInterval(countdownTimer);
-    clearTransition();
 
     const item = playlist[currentItemIndex];
 
@@ -505,48 +584,32 @@ function playCurrentItem() {
         return;
     }
 
+    beatCounter = 0;
+    subdivisionCounter = 0;
+
+    scheduledBeats = [];
+    displayedBeatIndex = -1;
+
+    currentBeatLabel = "-";
+    currentBeatTime = 0;
+
+    const ctx = getAudioContext();
+
+    itemStartAudioTime = ctx.currentTime;
+
+    itemEndAudioTime = itemStartAudioTime + item.duration;
+
     currentRemainingSeconds = item.duration;
+
+    progressRing.style.strokeDashoffset = RING_LENGTH;
 
     updateCurrentUI();
 
     startMetronomeForItem(item);
 
-    countdownTimer = setInterval(() => {
-        if (!isPlaying || isPaused) return;
+    cancelAnimationFrame(animationFrameId);
 
-        currentRemainingSeconds--;
-        playlistElapsedSeconds++;
-
-        updateCurrentUI();
-
-        if (currentRemainingSeconds <= 0) {
-            clearInterval(countdownTimer);
-            clearInterval(schedulerTimer);
-
-            if (currentRepeat < item.repeats) {
-                currentRepeat++;
-
-                transitionTimeout = setTimeout(() => {
-                    if (!isPlaying || isPaused) return;
-
-                    playCurrentItem();
-                }, 5000);
-            } else {
-                currentRepeat = 1;
-                currentItemIndex++;
-
-                transitionTimeout = setTimeout(() => {
-                    if (!isPlaying || isPaused) return;
-
-                    playCurrentItem();
-                }, 5000);
-            }
-        }
-    }, 1000);
-}
-
-function wait(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    animationFrameId = requestAnimationFrame(updatePlaybackState);
 }
 
 function stopMetronome() {
@@ -554,65 +617,113 @@ function stopMetronome() {
     schedulerTimer = null;
 }
 
-// =========================
 // Controls
-// =========================
-
 async function startPlaylist() {
-    if (playlist.length === 0) return;
+
+    if (playlist.length === 0) {
+        return;
+    }
 
     await getAudioContext().resume();
 
     if (isPlaying && isPaused) {
-        isPaused = false;
-
+        pausePlaylist();
         return;
     }
-
     if (isPlaying) return;
 
     isPlaying = true;
     isPaused = false;
+
     currentItemIndex = 0;
     currentRepeat = 1;
+
     playlistElapsedSeconds = 0;
 
     playCurrentItem();
 }
 
 function pausePlaylist() {
+
     if (!isPlaying) return;
 
     isPaused = !isPaused;
+
     pauseBtn.textContent = isPaused ? "▶ Resume" : "⏸ Pause";
 
     if (isPaused) {
-        stopMetronome();
-        beatDisplayEl.textContent = "PAUSED";
-    } else {
-        beatDisplayEl.textContent = "-";
-        const item = playlist[currentItemIndex];
-        if (item) {
-            startMetronomeForItem(item);
+        const ctx = getAudioContext();
+
+        if (!pendingTransition) {
+            pausedRemaining = Math.max(0, itemEndAudioTime - ctx.currentTime);
+            stopMetronome();
+        } else {
+            clearTimeout(transitionTimeout);
+            pendingTransitionDelay -= (performance.now() - transitionStartedAt);
         }
+
+        beatDisplayEl.textContent = "PAUSED";
+
+        return;
     }
+    const ctx = getAudioContext();
+    if (pendingTransition) {
+        transitionStartedAt = performance.now();
+        transitionTimeout = setTimeout(() => {
+            pendingTransition = false;
+            if (!isPlaying || isPaused) return;
+            playCurrentItem();
+        }, pendingTransitionDelay);
+
+        beatDisplayEl.textContent = "REST";
+        return;
+    }
+
+    const item = playlist[currentItemIndex];
+
+    itemStartAudioTime = ctx.currentTime - (item.duration - pausedRemaining);
+
+    itemEndAudioTime = ctx.currentTime + pausedRemaining;
+
+    startMetronomeForItem(item);
+
+    cancelAnimationFrame(animationFrameId);
+
+    animationFrameId = requestAnimationFrame(updatePlaybackState);
 }
 
 function stopPlaylist() {
+
     isPlaying = false;
     isPaused = false;
 
-    clearTransition();
-    clearInterval(schedulerTimer);
-    clearInterval(countdownTimer);
+    clearAllTimers();
 
-    stopMetronome();
+    pendingTransition = false;
+    pendingTransitionDelay = 0;
+    transitionStartedAt = 0;
+
+    pausedRemaining = 0;
+
+    itemStartAudioTime = 0;
+    itemEndAudioTime = 0;
+
+    beatCounter = 0;
+    subdivisionCounter = 0;
+
+    scheduledBeats = [];
+    displayedBeatIndex = -1;
+
+    currentBeatLabel = "-";
+    currentBeatTime = 0;
 
     currentItemIndex = 0;
     currentRepeat = 1;
+
     playlistElapsedSeconds = 0;
 
     beatDisplayEl.textContent = "-";
+
     currentBpmEl.textContent = "--";
     currentIndexEl.textContent = "-";
     currentRepeatEl.textContent = "-";
@@ -623,69 +734,26 @@ function stopPlaylist() {
 
     playlistProgressBar.style.width = "0%";
 
+    const txt = document.getElementById("playlistProgressText");
+
+    txt.textContent = "0%";
+
     pauseBtn.textContent = "⏸ Pause";
 
     document
         .querySelectorAll(".playlist-item")
-        .forEach(
-            row => row.classList.remove("active")
-        );
+        .forEach(row => {
+            row.classList.remove("active");
+        });
 }
 
-// =========================
 // Events
-// =========================
-
 startBtn.addEventListener("click", startPlaylist);
 pauseBtn.addEventListener("click", pausePlaylist);
 stopBtn.addEventListener("click", stopPlaylist);
 
-// =========================
-// Export / Import
-// =========================
 
-function exportPlaylist() {
-    const data = JSON.stringify(playlist, null, 2);
-    const blob = new Blob([data], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "metronome-playlist.json";
-    a.click();
-    URL.revokeObjectURL(url);
-}
 
-function importPlaylist(file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            playlist = JSON.parse(e.target.result);
-            savePlaylist();
-            renderPlaylist();
-        } catch (err) {
-            alert("Invalid file");
-        }
-    };
-
-    reader.readAsText(file);
-}
-
-// =========================
-// Bind UI
-// =========================
-
-exportBtn.addEventListener("click", exportPlaylist);
-
-importFile.addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        importPlaylist(file);
-    }
-});
-
-// =========================
 // Initial
-// =========================
-
 renderPlaylist();
 updateSummary();
