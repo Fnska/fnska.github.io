@@ -50,56 +50,23 @@ let playlistElapsedSeconds = 0;
 // DOM
 // =========================
 
-const playlistContainer =
-    document.getElementById("playlistContainer");
-
-const addItemBtn =
-    document.getElementById("addItemBtn");
-
-const startBtn =
-    document.getElementById("startBtn");
-
-const pauseBtn =
-    document.getElementById("pauseBtn");
-
-const stopBtn =
-    document.getElementById("stopBtn");
-
-const exportBtn =
-    document.getElementById("exportBtn");
-
-const importFile =
-    document.getElementById("importFile");
-
-const currentBpmEl =
-    document.getElementById("currentBpm");
-
-const currentIndexEl =
-    document.getElementById("currentIndex");
-
-const currentRepeatEl =
-    document.getElementById("currentRepeat");
-
-const timeLeftEl =
-    document.getElementById("timeLeft");
-
-const currentSubdivisionEl =
-    document.getElementById("currentSubdivision");
-
-const beatDisplayEl =
-    document.getElementById("beatDisplay");
-
-const totalDurationEl =
-    document.getElementById("totalDuration");
-
-const totalItemsEl =
-    document.getElementById("totalItems");
-
-const playlistProgressBar =
-    document.getElementById("playlistProgressBar");
-
-const progressRing =
-    document.getElementById("currentProgressRing");
+const playlistContainer = document.getElementById("playlistContainer");
+const addItemBtn = document.getElementById("addItemBtn");
+const startBtn = document.getElementById("startBtn");
+const pauseBtn = document.getElementById("pauseBtn");
+const stopBtn = document.getElementById("stopBtn");
+const exportBtn = document.getElementById("exportBtn");
+const importFile = document.getElementById("importFile");
+const currentBpmEl = document.getElementById("currentBpm");
+const currentIndexEl = document.getElementById("currentIndex");
+const currentRepeatEl = document.getElementById("currentRepeat");
+const timeLeftEl = document.getElementById("timeLeft");
+const currentSubdivisionEl = document.getElementById("currentSubdivision");
+const beatDisplayEl = document.getElementById("beatDisplay");
+const totalDurationEl = document.getElementById("totalDuration");
+const totalItemsEl = document.getElementById("totalItems");
+const playlistProgressBar = document.getElementById("playlistProgressBar");
+const progressRing = document.getElementById("currentProgressRing");
 
 // =========================
 // Presets
@@ -109,10 +76,10 @@ const PRESETS = {
 
     warmup: [
         {
-        bpm: 70,
-        duration: 120,
-        repeats: 2,
-        subdivision: "sixteenth"
+            bpm: 70,
+            duration: 120,
+            repeats: 2,
+            subdivision: "sixteenth"
         },
         {
             bpm: 80,
@@ -188,12 +155,9 @@ const PRESETS = {
 // =========================
 
 function loadPlaylist() {
+    const saved = localStorage.getItem(STORAGE_KEY);
 
-    const saved =
-        localStorage.getItem(STORAGE_KEY);
-
-    if (!saved)
-        return [...DEFAULT_PLAYLIST];
+    if (!saved) return [...DEFAULT_PLAYLIST];
 
     try {
         return JSON.parse(saved);
@@ -204,12 +168,7 @@ function loadPlaylist() {
 }
 
 function savePlaylist() {
-
-    localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(playlist)
-    );
-
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
     updateSummary();
 }
 
@@ -218,49 +177,23 @@ function savePlaylist() {
 // =========================
 
 function formatTime(totalSeconds) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
 
-    const minutes =
-        Math.floor(totalSeconds / 60);
-
-    const seconds =
-        totalSeconds % 60;
-
-    return (
-        String(minutes).padStart(2, "0")
-        +
-        ":"
-        +
-        String(seconds).padStart(2, "0")
-    );
+    return (String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0"));
 }
 
 function calculateTotalDuration() {
-
     let total = 0;
-
-    playlist.forEach(item => {
-
-        total +=
-            item.duration *
-            item.repeats;
-
-    });
+    playlist.forEach(item => { total += item.duration * item.repeats; });
 
     return total;
 }
 
 function updateSummary() {
-
-    playlistTotalSeconds =
-        calculateTotalDuration();
-
-    totalDurationEl.textContent =
-        formatTime(
-            playlistTotalSeconds
-        );
-
-    totalItemsEl.textContent =
-        playlist.length;
+    playlistTotalSeconds = calculateTotalDuration();
+    totalDurationEl.textContent = formatTime(playlistTotalSeconds);
+    totalItemsEl.textContent = playlist.length;
 }
 
 // =========================
@@ -268,129 +201,49 @@ function updateSummary() {
 // =========================
 
 function renderPlaylist() {
-
     playlistContainer.innerHTML = "";
-
-    const template =
-        document.getElementById(
-            "playlistItemTemplate"
-        );
+    const template = document.getElementById("playlistItemTemplate");
 
     playlist.forEach((item, index) => {
+        const clone = template.content.cloneNode(true);
+        const row = clone.querySelector(".playlist-item");
+        const bpmInput = clone.querySelector(".bpm-input");
+        const durationInput = clone.querySelector(".duration-input");
+        const repeatInput = clone.querySelector(".repeat-input");
+        const subdivisionSelect = clone.querySelector(".subdivision-select");
+        const deleteBtn = clone.querySelector(".delete-btn");
+        bpmInput.value = item.bpm;
+        durationInput.value = item.duration;
+        repeatInput.value = item.repeats;
+        subdivisionSelect.value = item.subdivision;
 
-        const clone =
-            template.content
-                .cloneNode(true);
+        bpmInput.addEventListener("change", () => {
+            item.bpm = parseInt(bpmInput.value) || 60;
+            savePlaylist();
+        });
 
-        const row =
-            clone.querySelector(
-                ".playlist-item"
-            );
+        durationInput.addEventListener("change", () => {
+            item.duration = parseInt(durationInput.value) || 60;
+            savePlaylist();
+        });
 
-        const bpmInput =
-            clone.querySelector(
-                ".bpm-input"
-            );
+        repeatInput.addEventListener("change", () => {
+            item.repeats = parseInt(repeatInput.value) || 1;
+            savePlaylist();
+        });
 
-        const durationInput =
-            clone.querySelector(
-                ".duration-input"
-            );
+        subdivisionSelect.addEventListener("change", () => {
+            item.subdivision = subdivisionSelect.value;
+            savePlaylist();
+        });
 
-        const repeatInput =
-            clone.querySelector(
-                ".repeat-input"
-            );
+        deleteBtn.addEventListener("click", () => {
+            playlist.splice(index, 1);
+            savePlaylist();
+            renderPlaylist();
+        });
 
-        const subdivisionSelect =
-            clone.querySelector(
-                ".subdivision-select"
-            );
-
-        const deleteBtn =
-            clone.querySelector(
-                ".delete-btn"
-            );
-
-        bpmInput.value =
-            item.bpm;
-
-        durationInput.value =
-            item.duration;
-
-        repeatInput.value =
-            item.repeats;
-
-        subdivisionSelect.value =
-            item.subdivision;
-
-        bpmInput.addEventListener(
-            "change",
-            () => {
-
-                item.bpm =
-                    parseInt(
-                        bpmInput.value
-                    ) || 60;
-
-                savePlaylist();
-            }
-        );
-
-        durationInput.addEventListener(
-            "change",
-            () => {
-
-                item.duration =
-                    parseInt(
-                        durationInput.value
-                    ) || 60;
-
-                savePlaylist();
-            }
-        );
-
-        repeatInput.addEventListener(
-            "change",
-            () => {
-
-                item.repeats =
-                    parseInt(
-                        repeatInput.value
-                    ) || 1;
-
-                savePlaylist();
-            }
-        );
-
-        subdivisionSelect.addEventListener(
-            "change",
-            () => {
-
-                item.subdivision =
-                    subdivisionSelect.value;
-
-                savePlaylist();
-            }
-        );
-
-        deleteBtn.addEventListener(
-            "click",
-            () => {
-
-                playlist.splice(
-                    index,
-                    1
-                );
-
-                savePlaylist();
-                renderPlaylist();
-            }
-        );
-
-        playlistContainer.appendChild(
-            clone
-        );
+        playlistContainer.appendChild(clone);
     });
 
     updateSummary();
@@ -401,51 +254,27 @@ function renderPlaylist() {
 // =========================
 
 function addPlaylistItem() {
-
-    playlist.push({
-        bpm: 100,
-        duration: 60,
-        repeats: 2,
-        subdivision: "sixteenth"
-    });
+    playlist.push({ bpm: 100, duration: 60, repeats: 2, subdivision: "sixteenth" });
 
     savePlaylist();
     renderPlaylist();
 }
 
-addItemBtn.addEventListener(
-    "click",
-    addPlaylistItem
-);
+addItemBtn.addEventListener("click", addPlaylistItem);
 
 // =========================
 // Presets
 // =========================
 
 document
-    .querySelectorAll(
-        "[data-preset]"
-    )
+    .querySelectorAll("[data-preset]")
     .forEach(button => {
-
-        button.addEventListener(
-            "click",
-            () => {
-
-                const name =
-                    button.dataset.preset;
-
-                playlist =
-                    JSON.parse(
-                        JSON.stringify(
-                            PRESETS[name]
-                        )
-                    );
-
-                savePlaylist();
-                renderPlaylist();
-            }
-        );
+        button.addEventListener("click", () => {
+            const name = button.dataset.preset;
+            playlist = JSON.parse(JSON.stringify(PRESETS[name]));
+            savePlaylist();
+            renderPlaylist();
+        });
     });
 
 // =========================
@@ -473,6 +302,11 @@ let pausedAt = null;
 let resumeTimeout = null;
 let transitionTimeout = null;
 
+let schedulerTimer = null;
+let nextNoteTime = 0;
+const LOOKAHEAD = 25;
+const SCHEDULE_AHEAD_TIME = 0.1;
+
 const RING_LENGTH = 327;
 
 // =========================
@@ -487,196 +321,73 @@ function clearTransition() {
 }
 
 function getAudioContext() {
-
     if (!audioContext) {
-
-        audioContext =
-            new (
-                window.AudioContext ||
-                window.webkitAudioContext
-            )();
-
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
     }
 
     return audioContext;
 }
 
-function createClick(
-    frequency,
-    volume,
-    duration = 0.05
-) {
-
-    const ctx =
-        getAudioContext();
-
-    const osc =
-        ctx.createOscillator();
-
-    const gain =
-        ctx.createGain();
+function createClick(frequency, volume, when, duration = 0.03) {
+    const ctx = getAudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
 
     osc.type = "sine";
-
-    osc.frequency.value =
-        frequency;
-
-    gain.gain.setValueAtTime(
-        volume,
-        ctx.currentTime
-    );
-
-    gain.gain.exponentialRampToValueAtTime(
-        0.0001,
-        ctx.currentTime + duration
-    );
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start();
-
-    osc.stop(
-        ctx.currentTime + duration
-    );
+    osc.frequency.value = frequency;
+    gain.gain.setValueAtTime(volume, when);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
 }
 
 function strongBeat() {
-
-    createClick(
-        900,
-        0.25
-    );
+    createClick(900, 0.25);
 }
 
 function weakBeat() {
-
-    // createClick(
-    //     900,
-    //     0.12
-    // );
-
-    createClick(
-        900,
-        0.25
-    );
+    // createClick(900, 0.12);
+    createClick(900, 0.25);
 }
 
 // =========================
 // Subdivisions
 // =========================
 
-function getSubdivisionFactor(
-    subdivision
-) {
-
+function getSubdivisionFactor(subdivision) {
     switch (subdivision) {
-
         case "quarter":
             return 1;
-
         case "eighth":
             return 2;
-
         case "triplet":
             return 3;
-
         case "sixteenth":
             return 4;
-
         default:
             return 1;
     }
 }
 
-function subdivisionLabel(
-    subdivision,
-    step
-) {
-
-    if (
-        subdivision === "quarter"
-    ) {
-
-        return (
-            (step % 4) + 1
-        ).toString();
+function subdivisionLabel(subdivision, step) {
+    if (subdivision === "quarter") {
+        return ((step % 4) + 1).toString();
     }
 
-    if (
-        subdivision === "eighth"
-    ) {
+    if (subdivision === "eighth") {
+        const labels = ["1", "&", "2", "&", "3", "&", "4", "&"];
 
-        const labels =
-            [
-                "1",
-                "&",
-                "2",
-                "&",
-                "3",
-                "&",
-                "4",
-                "&"
-            ];
-
-        return labels[
-            step % labels.length
-        ];
+        return labels[step % labels.length];
     }
 
-    if (
-        subdivision === "triplet"
-    ) {
+    if (subdivision === "triplet") {
+        const labels = ["1", "tri", "plet", "2", "tri", "plet", "3", "tri", "plet", "4", "tri", "plet"];
 
-        const labels =
-            [
-                "1",
-                "tri",
-                "plet",
-                "2",
-                "tri",
-                "plet",
-                "3",
-                "tri",
-                "plet",
-                "4",
-                "tri",
-                "plet"
-            ];
-
-        return labels[
-            step % labels.length
-        ];
+        return labels[step % labels.length];
     }
 
-    if (
-        subdivision ===
-        "sixteenth"
-    ) {
+    if (subdivision === "sixteenth") {
+        const labels = ["1", "e", "&", "a", "2", "e", "&", "a", "3", "e", "&", "a", "4", "e", "&", "a"];
 
-        const labels =
-            [
-                "1",
-                "e",
-                "&",
-                "a",
-                "2",
-                "e",
-                "&",
-                "a",
-                "3",
-                "e",
-                "&",
-                "a",
-                "4",
-                "e",
-                "&",
-                "a"
-            ];
-
-        return labels[
-            step % labels.length
-        ];
+        return labels[step % labels.length];
     }
 
     return "-";
@@ -687,175 +398,88 @@ function subdivisionLabel(
 // =========================
 
 function updateCurrentUI() {
+    const item = playlist[currentItemIndex];
 
-    const item =
-        playlist[
-        currentItemIndex
-        ];
+    if (!item) return;
 
-    if (!item)
-        return;
+    currentBpmEl.textContent = item.bpm;
+    currentIndexEl.textContent = (currentItemIndex + 1) + " / " + playlist.length;
+    currentRepeatEl.textContent = currentRepeat + " / " + item.repeats;
+    currentSubdivisionEl.textContent = item.subdivision;
+    timeLeftEl.textContent = formatTime(currentRemainingSeconds);
 
-    currentBpmEl.textContent =
-        item.bpm;
-
-    currentIndexEl.textContent =
-        (
-            currentItemIndex + 1
-        )
-        +
-        " / "
-        +
-        playlist.length;
-
-    currentRepeatEl.textContent =
-        currentRepeat
-        +
-        " / "
-        +
-        item.repeats;
-
-    currentSubdivisionEl.textContent =
-        item.subdivision;
-
-    timeLeftEl.textContent =
-        formatTime(
-            currentRemainingSeconds
-        );
-
-    updateRingProgress(
-        item
-    );
+    updateRingProgress(item);
 
     updatePlaylistProgress();
 
     document
-        .querySelectorAll(
-            ".playlist-item"
-        )
-        .forEach(
-            (
-                row,
-                index
-            ) => {
+        .querySelectorAll(".playlist-item")
+        .forEach((row, index) => {
 
-                row.classList.toggle(
-                    "active",
-                    index ===
-                    currentItemIndex
-                );
+            row.classList.toggle("active", index === currentItemIndex);
 
-            }
-        );
+        });
 }
 
-function updateRingProgress(
-    item
-) {
+function updateRingProgress(item) {
+    const ratio = currentRemainingSeconds / item.duration;
+    const offset = RING_LENGTH * ratio;
 
-    const ratio =
-        currentRemainingSeconds
-        /
-        item.duration;
-
-    const offset =
-        RING_LENGTH * ratio;
-
-    progressRing.style
-        .strokeDashoffset =
-        offset;
+    progressRing.style.strokeDashoffset = offset;
 }
 
 function updatePlaylistProgress() {
+    const percent = playlistTotalSeconds === 0 ? 0 : (playlistElapsedSeconds / playlistTotalSeconds) * 100;
 
-    const percent =
-        playlistTotalSeconds === 0
-            ? 0
-            :
-            (
-                playlistElapsedSeconds
-                /
-                playlistTotalSeconds
-            ) * 100;
+    playlistProgressBar.style.width = percent + "%";
 
-    playlistProgressBar
-        .style.width =
-        percent + "%";
+    const txt = document.getElementById("playlistProgressText");
 
-    const txt =
-        document
-            .getElementById(
-                "playlistProgressText"
-            );
-
-    txt.textContent =
-        percent.toFixed(0)
-        + "%";
+    txt.textContent = percent.toFixed(0) + "%";
 }
 
 // =========================
 // Metronome
 // =========================
 
-function startMetronomeForItem(
-    item
-) {
+function scheduleBeat(item, strong) {
+    if (strong) {
+        createClick(900, 0.25, time);
+    } else {
+        createClick(900, 0.25, time);
+    }
+}
 
-    clearInterval(
-        metronomeTimer
-    );
+function scheduler(time) {
+    const ctx = getAudioContext();
+    const factor = getSubdivisionFactor(item.subdivision);
+    const secondsPerStep = (60 / item.bpm) / factor;
+
+    while (nextNoteTime < ctx.currentTime + SCHEDULE_AHEAD_TIME) {
+        const strong = subdivisionCounter % factor === 0;
+        scheduleBeat(nextNoteTime, strong);
+
+        nextNoteTime += secondsPerStep;
+
+        subdivisionCounter++;
+        beatCounter++;
+    }
+}
+
+function startMetronomeForItem(item) {
+    clearInterval(metronomeTimer);
 
     beatCounter = 0;
     subdivisionCounter = 0;
 
-    const factor =
-        getSubdivisionFactor(
-            item.subdivision
-        );
+    const ctx = getAudioContext();
+    nextNoteTime = ctx.currentTime + 0.05;
 
-    const intervalMs =
-        (
-            60000
-            /
-            item.bpm
-        )
-        /
-        factor;
+    schedulerTimer = setInterval(() => {
+        if (!isPlaying || isPaused) return;
 
-    metronomeTimer =
-        setInterval(
-            () => {
-
-                if (!isPlaying || isPaused) return;
-
-                const strong =
-                    subdivisionCounter
-                    %
-                    factor
-                    === 0;
-
-                if (strong) {
-
-                    strongBeat();
-
-                } else {
-
-                    weakBeat();
-                }
-
-                beatDisplayEl
-                    .textContent =
-                    subdivisionLabel(
-                        item.subdivision,
-                        beatCounter
-                    );
-
-                beatCounter++;
-                subdivisionCounter++;
-
-            },
-            intervalMs
-        );
+        scheduler(item);
+    }, LOOKAHEAD);
 }
 
 // =========================
@@ -919,8 +543,8 @@ function wait(ms) {
 }
 
 function stopMetronome() {
-    clearInterval(metronomeTimer);
-    metronomeTimer = null;
+    clearInterval(schedulerTimer);
+    schedulerTimer = null;
 }
 
 // =========================
@@ -928,53 +552,32 @@ function stopMetronome() {
 // =========================
 
 async function startPlaylist() {
+    if (playlist.length === 0) return;
 
-    if (
-        playlist.length === 0
-    )
-        return;
+    await getAudioContext().resume();
 
-    await getAudioContext()
-        .resume();
-
-    if (
-        isPlaying &&
-        isPaused
-    ) {
-
+    if (isPlaying && isPaused) {
         isPaused = false;
 
         return;
     }
 
-    if (
-        isPlaying
-    )
-        return;
+    if (isPlaying) return;
 
     isPlaying = true;
-
     isPaused = false;
-
     currentItemIndex = 0;
-
     currentRepeat = 1;
-
     playlistElapsedSeconds = 0;
 
     playCurrentItem();
 }
 
 function pausePlaylist() {
-
     if (!isPlaying) return;
 
     isPaused = !isPaused;
-
-    pauseBtn.textContent =
-        isPaused
-            ? "▶ Resume"
-            : "⏸ Pause";
+    pauseBtn.textContent = isPaused ? "▶ Resume" : "⏸ Pause";
 
     if (isPaused) {
         stopMetronome();
@@ -988,9 +591,7 @@ function pausePlaylist() {
 }
 
 function stopPlaylist() {
-
     isPlaying = false;
-
     isPaused = false;
 
     clearTransition();
@@ -1000,49 +601,26 @@ function stopPlaylist() {
     stopMetronome();
 
     currentItemIndex = 0;
-
     currentRepeat = 1;
-
     playlistElapsedSeconds = 0;
 
-    beatDisplayEl.textContent =
-        "-";
+    beatDisplayEl.textContent = "-";
+    currentBpmEl.textContent = "--";
+    currentIndexEl.textContent = "-";
+    currentRepeatEl.textContent = "-";
+    currentSubdivisionEl.textContent = "-";
+    timeLeftEl.textContent = "--:--";
 
-    currentBpmEl.textContent =
-        "--";
+    progressRing.style.strokeDashoffset = RING_LENGTH;
 
-    currentIndexEl.textContent =
-        "-";
+    playlistProgressBar.style.width = "0%";
 
-    currentRepeatEl.textContent =
-        "-";
-
-    currentSubdivisionEl.textContent =
-        "-";
-
-    timeLeftEl.textContent =
-        "--:--";
-
-    progressRing.style
-        .strokeDashoffset =
-        RING_LENGTH;
-
-    playlistProgressBar
-        .style.width =
-        "0%";
-
-    pauseBtn.textContent =
-        "⏸ Pause";
+    pauseBtn.textContent = "⏸ Pause";
 
     document
-        .querySelectorAll(
-            ".playlist-item"
-        )
+        .querySelectorAll(".playlist-item")
         .forEach(
-            row =>
-                row.classList.remove(
-                    "active"
-                )
+            row => row.classList.remove("active")
         );
 }
 
@@ -1050,103 +628,36 @@ function stopPlaylist() {
 // Events
 // =========================
 
-startBtn.addEventListener(
-    "click",
-    startPlaylist
-);
-
-pauseBtn.addEventListener(
-    "click",
-    pausePlaylist
-);
-
-stopBtn.addEventListener(
-    "click",
-    stopPlaylist
-);
-
-
-// =========================
-// Part 3
-// Drag & Drop + Import/Export
-// =========================
-
-// =========================
-// Drag & Drop Reordering
-// =========================
-
-
-
-
+startBtn.addEventListener("click", startPlaylist);
+pauseBtn.addEventListener("click", pausePlaylist);
+stopBtn.addEventListener("click", stopPlaylist);
 
 // =========================
 // Export / Import
 // =========================
 
 function exportPlaylist() {
-
-    const data =
-        JSON.stringify(
-            playlist,
-            null,
-            2
-        );
-
-    const blob =
-        new Blob(
-            [data],
-            {
-                type:
-                    "application/json"
-            }
-        );
-
-    const url =
-        URL.createObjectURL(blob);
-
-    const a =
-        document.createElement(
-            "a"
-        );
-
-    a.href =
-        url;
-
-    a.download =
-        "metronome-playlist.json";
-
+    const data = JSON.stringify(playlist, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "metronome-playlist.json";
     a.click();
-
     URL.revokeObjectURL(url);
 }
 
 function importPlaylist(file) {
-
-    const reader =
-        new FileReader();
-
-    reader.onload =
-        (e) => {
-
-            try {
-
-                playlist =
-                    JSON.parse(
-                        e.target.result
-                    );
-
-                savePlaylist();
-
-                renderPlaylist();
-
-            } catch (err) {
-
-                alert(
-                    "Invalid file"
-                );
-            }
-
-        };
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            playlist = JSON.parse(e.target.result);
+            savePlaylist();
+            renderPlaylist();
+        } catch (err) {
+            alert("Invalid file");
+        }
+    };
 
     reader.readAsText(file);
 }
@@ -1155,25 +666,14 @@ function importPlaylist(file) {
 // Bind UI
 // =========================
 
-exportBtn.addEventListener(
-    "click",
-    exportPlaylist
-);
+exportBtn.addEventListener("click", exportPlaylist);
 
-importFile.addEventListener(
-    "change",
-    (e) => {
-
-        const file =
-            e.target.files[0];
-
-        if (file) {
-
-            importPlaylist(file);
-        }
-
+importFile.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        importPlaylist(file);
     }
-);
+});
 
 // =========================
 // Initial
