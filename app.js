@@ -302,6 +302,7 @@ updateSummary();
 let audioContext = null;
 
 let metronomeTimer = null;
+let countdownTimer = null;
 
 let beatCounter = 0;
 let subdivisionCounter = 0;
@@ -314,11 +315,6 @@ let schedulerTimer = null;
 let nextNoteTime = 0;
 const LOOKAHEAD = 25;
 const SCHEDULE_AHEAD_TIME = 0.1;
-
-let itemStartTime = 0;
-let itemScheduledEnd = 0;
-
-let pauseOffset = 0;
 
 const RING_LENGTH = 327;
 
@@ -354,7 +350,7 @@ function createClick(frequency, volume, when, duration = 0.03) {
 
     gain.gain.setValueAtTime(volume, when);
     gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
-
+    
     osc.start(when);
     osc.stop(when + duration);
 }
@@ -433,9 +429,7 @@ function updateCurrentUI() {
 }
 
 function updateRingProgress(item) {
-    const ctx = getAudioContext();
-    const elapsed = ctx.currentTime - itemStartTime;
-    const ratio = Math.max(0, 1 - (elapsed / item.duration));
+    const ratio = currentRemainingSeconds / item.duration;
     const offset = RING_LENGTH * ratio;
 
     progressRing.style.strokeDashoffset = offset;
@@ -483,6 +477,8 @@ function scheduler(item) {
 function startMetronomeForItem(item) {
     clearInterval(schedulerTimer);
 
+   
+
     const ctx = getAudioContext();
     nextNoteTime = ctx.currentTime + 0.05;
 
@@ -496,28 +492,10 @@ function startMetronomeForItem(item) {
 // =========================
 // Playback Logic
 // =========================
-function updateUITick() {
-    if (!isPlaying) return;
-
-    const ctx = getAudioContext();
-    const item = playlist[currentItemIndex];
-
-    if (!item) return;
-
-    const elapsed = ctx.currentTime - itemStartTime;
-    const remaining = item.duration - elapsed;
-
-    currentRemainingSeconds = Math.max(0, Math.ceil(remaining));
-
-    updateCurrentUI();
-
-    if (remaining > 0) {
-        requestAnimationFrame(updateUITick);
-    }
-}
 
 function playCurrentItem() {
     clearInterval(schedulerTimer);
+    clearInterval(countdownTimer);
     clearTransition();
 
     const item = playlist[currentItemIndex];
@@ -527,18 +505,48 @@ function playCurrentItem() {
         return;
     }
 
-    const ctx = getAudioContext();
-
-    itemStartTime = ctx.currentTime;
-    itemScheduledEnd = itemStartTime + item.duration;
-
     currentRemainingSeconds = item.duration;
 
     updateCurrentUI();
 
     startMetronomeForItem(item);
 
-    requestAnimationFrame(updateUITick);
+    countdownTimer = setInterval(() => {
+        if (!isPlaying || isPaused) return;
+
+        currentRemainingSeconds--;
+        playlistElapsedSeconds++;
+
+        updateCurrentUI();
+
+        if (currentRemainingSeconds <= 0) {
+            clearInterval(countdownTimer);
+            clearInterval(schedulerTimer);
+
+            if (currentRepeat < item.repeats) {
+                currentRepeat++;
+
+                transitionTimeout = setTimeout(() => {
+                    if (!isPlaying || isPaused) return;
+
+                    playCurrentItem();
+                }, 5000);
+            } else {
+                currentRepeat = 1;
+                currentItemIndex++;
+
+                transitionTimeout = setTimeout(() => {
+                    if (!isPlaying || isPaused) return;
+
+                    playCurrentItem();
+                }, 5000);
+            }
+        }
+    }, 1000);
+}
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function stopMetronome() {
@@ -578,19 +586,15 @@ function pausePlaylist() {
     isPaused = !isPaused;
     pauseBtn.textContent = isPaused ? "▶ Resume" : "⏸ Pause";
 
-    const ctx = getAudioContext();
-
     if (isPaused) {
-        pauseOffset = ctx.currentTime - itemStartTime;
-        clearInterval(schedulerTimer);
+        stopMetronome();
         beatDisplayEl.textContent = "PAUSED";
     } else {
+        beatDisplayEl.textContent = "-";
         const item = playlist[currentItemIndex];
-        if (!item) return;
-
-        itemStartTime = ctx.currentTime - pauseOffset;
-        startMetronomeForItem(item);
-        requestAnimationFrame(updateUITick);
+        if (item) {
+            startMetronomeForItem(item);
+        }
     }
 }
 
@@ -600,7 +604,7 @@ function stopPlaylist() {
 
     clearTransition();
     clearInterval(schedulerTimer);
-
+    clearInterval(countdownTimer);
 
     stopMetronome();
 
