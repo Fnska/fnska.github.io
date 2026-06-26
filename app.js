@@ -68,19 +68,19 @@ const PRESETS = {
         },
         {
             bpm: 80,
-            duration: 60,
+            duration: 90,
             repeats: 2,
             subdivision: "sixteenth"
         },
         {
             bpm: 90,
-            duration: 45,
+            duration: 60,
             repeats: 2,
             subdivision: "sixteenth"
         },
         {
             bpm: 100,
-            duration: 30,
+            duration: 45,
             repeats: 2,
             subdivision: "sixteenth"
         }
@@ -96,7 +96,7 @@ const PRESETS = {
     speed: [
         {
             bpm: 80,
-            duration: 60,
+            duration: 90,
             repeats: 2,
             subdivision: "sixteenth"
         },
@@ -121,20 +121,26 @@ const PRESETS = {
     ],
     practice: [
         {
-            bpm: 70,
-            duration: 180,
+            bpm: 90,
+            duration: 90,
             repeats: 2,
-            subdivision: "quarter"
+            subdivision: "sixteenth"
         },
         {
-            bpm: 90,
-            duration: 120,
+            bpm: 100,
+            duration: 60,
             repeats: 2,
-            subdivision: "triplet"
+            subdivision: "sixteenth"
+        },
+        {
+            bpm: 100,
+            duration: 60,
+            repeats: 2,
+            subdivision: "sixteenth"
         },
         {
             bpm: 110,
-            duration: 120,
+            duration: 60,
             repeats: 2,
             subdivision: "sixteenth"
         }
