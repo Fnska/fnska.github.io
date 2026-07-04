@@ -61,25 +61,25 @@ const progressRing = document.getElementById("currentProgressRing");
 const PRESETS = {
     warmup: [
         {
-            bpm: 70,
+            bpm: 80,
             duration: 120,
             repeats: 2,
             subdivision: "sixteenth"
         },
         {
-            bpm: 80,
+            bpm: 90,
             duration: 90,
             repeats: 2,
             subdivision: "sixteenth"
         },
         {
-            bpm: 90,
+            bpm: 100,
             duration: 60,
             repeats: 2,
             subdivision: "sixteenth"
         },
         {
-            bpm: 100,
+            bpm: 110,
             duration: 45,
             repeats: 2,
             subdivision: "sixteenth"
@@ -95,14 +95,8 @@ const PRESETS = {
     ],
     speed: [
         {
-            bpm: 80,
-            duration: 90,
-            repeats: 2,
-            subdivision: "sixteenth"
-        },
-        {
             bpm: 90,
-            duration: 60,
+            duration: 90,
             repeats: 2,
             subdivision: "sixteenth"
         },
@@ -114,24 +108,44 @@ const PRESETS = {
         },
         {
             bpm: 110,
+            duration: 60,
+            repeats: 2,
+            subdivision: "sixteenth"
+        },
+        {
+            bpm: 120,
             duration: 60,
             repeats: 2,
             subdivision: "sixteenth"
         }
     ],
-    practice: [
+    double: [
         {
             bpm: 90,
             duration: 90,
-            repeats: 2,
+            repeats: 1,
             subdivision: "sixteenth"
         },
         {
             bpm: 100,
             duration: 60,
-            repeats: 2,
+            repeats: 1,
             subdivision: "sixteenth"
         },
+        {
+            bpm: 110,
+            duration: 60,
+            repeats: 1,
+            subdivision: "sixteenth"
+        },
+        {
+            bpm: 120,
+            duration: 60,
+            repeats: 1,
+            subdivision: "sixteenth"
+        }
+    ],
+    extra: [
         {
             bpm: 100,
             duration: 60,
@@ -140,6 +154,18 @@ const PRESETS = {
         },
         {
             bpm: 110,
+            duration: 60,
+            repeats: 2,
+            subdivision: "sixteenth"
+        },
+        {
+            bpm: 120,
+            duration: 60,
+            repeats: 2,
+            subdivision: "sixteenth"
+        },
+        {
+            bpm: 130,
             duration: 60,
             repeats: 2,
             subdivision: "sixteenth"
